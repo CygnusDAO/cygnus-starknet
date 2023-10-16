@@ -739,7 +739,7 @@ mod Borrowable {
         /// # Implementation
         /// * IBorrowable
         fn deposit(ref self: ContractState, assets: u256, recipient: ContractAddress) -> u256 {
-            self.lock();
+            self.lock_and_accrue();
 
             // Convert assets to shares
             let shares = self.convert_to_shares(assets);
@@ -785,7 +785,7 @@ mod Borrowable {
             owner: ContractAddress
         ) -> u256 {
             /// Lock and update balance
-            self.lock_and_update();
+            self.lock_and_accrue();
 
             /// Get sender
             let caller = get_caller_address();
@@ -1114,7 +1114,7 @@ mod Borrowable {
             calldata: LeverageCalldata
         ) -> u256 {
             /// Lock and update balance
-            self.lock_and_update();
+            self.lock_and_accrue();
 
             /// Check that caller has allowance to borrow on behalf of `borrower`
             /// We use the same allowance as redeem.
@@ -1157,17 +1157,16 @@ mod Borrowable {
             /// `borrowAmount` by passing `accountBorrows` to the collateral contract
             if borrow_amount > repay_amount {
                 /// The collateral contract prices the user's deposited liquidity in USD. If the borrowed
-                /// amount would put the user in shortfall then it returns false
+                /// amount (+ current borrow balance) would put the user in shortfall then it returns false
                 let collateral = self.twin_star.read();
-                let can_borrow = collateral.can_borrow(borrower, account_usd);
 
                 /// # Error
                 /// * `INSUFFICIENT_LIQUIDITY` - Revert if user has insufficient collateral amount for this loan
-                assert(can_borrow, INSUFFICIENT_LIQUIDITY);
+                assert(collateral.can_borrow(borrower, account_usd), INSUFFICIENT_LIQUIDITY);
             }
 
             /// ────────── 6. Deposit in strategy
-            /// Deposit underlying in strategy, if 0 then would've reverted by now
+            /// Deposit underlying in strategy (only from repay transaction)
             if repay_amount > 0 {
                 self.after_deposit(repay_amount);
             };
@@ -1197,7 +1196,7 @@ mod Borrowable {
             calldata: LiquidateCalldata
         ) -> u256 {
             /// Lock and update balance
-            self.lock();
+            self.lock_and_accrue();
 
             /// Get the sender address - We need this for the router to allow flash liquidations
             let caller = get_caller_address();
@@ -1849,7 +1848,7 @@ mod Borrowable {
 
         /// Lock and update, used at the start of function
         #[inline(always)]
-        fn lock_and_update(ref self: ContractState) {
+        fn lock_and_accrue(ref self: ContractState) {
             self.lock();
             self.accrue_interest_internal();
         }
