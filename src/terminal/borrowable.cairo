@@ -730,8 +730,8 @@ mod Borrowable {
             self.exchange_rate_internal()
         }
 
-        // TODO: Deposit in masterchef or w/e and use deposit fee mechanism
-        /// Deposit assets into the vault
+        /// Transfers USDC from caller and mints them shares. Deposits all USDC into
+        /// zkLend's USDC pool.
         ///
         /// # Security
         /// * Non-reentrant
@@ -770,8 +770,8 @@ mod Borrowable {
             shares
         }
 
-        // TODO: Withdraw from masterchef or w/e and use deposit fee mechanism
-        /// Deposit assets into the vault
+        /// Converts `shares` to USDC assets, withdraws assets from zkLend's USDC pool
+        /// and sends assets to `recipient`
         ///
         /// # Security
         /// * Non-reentrant
