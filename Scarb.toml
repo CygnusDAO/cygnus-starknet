@@ -1,0 +1,31 @@
+[package]
+name = "cygnus"
+version = "0.1.0"
+authors = ["swan_of_bodom <@0xhyoga>"]
+license = "MIT"
+keywords = ["starknet", "defi", "lending", "stablecoins", "lps"]
+description = "Decentralized stablecoin lending for Liquidity Providers"
+documentation = "https://docs.cygnusdao.finance"
+homepage = "https://cygnusdao.finance"
+repository = "https://github.com/CygnusDAO"
+
+[[target.starknet-contract]]
+sierra = true
+casm = true
+allowed-libfuncs-list.name = "experimental"
+
+[cairo]
+sierra-replace-ids = true
+
+[dependencies]
+starknet = ">= 2.1.0"
+snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry.git", tag = "v0.7.1" }
+
+[[tool.snforge.fork]]
+name = "MAINNET"
+url = "https://starknet-mainnet.g.alchemy.com/v2/QIsxx87h6WcoewSQUsGXFFmEMgLU8GfW"
+block_id.tag = "Latest"
+
+[tool.snforge]
+exit_first = true
+
