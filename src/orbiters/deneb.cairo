@@ -7,10 +7,10 @@ use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherT
 
 /// Interface - Collateral Deployer
 #[starknet::interface]
-trait IDeneb<TContractState> {
+trait IDeneb<T> {
     /// # Returns
     /// * The class hash of the collateral contract this orbiter deploys
-    fn collateral_class_hash(self: @TContractState) -> ClassHash;
+    fn collateral_class_hash(self: @T) -> ClassHash;
 
     /// Deploys the collateral contract with the borrowable address
     ///
@@ -23,7 +23,7 @@ trait IDeneb<TContractState> {
     /// # Returns
     /// * The deployed collateral contract
     fn deploy_collateral(
-        ref self: TContractState,
+        ref self: T,
         underlying: ContractAddress,
         borrowable: IBorrowableDispatcher,
         oracle: ContractAddress,

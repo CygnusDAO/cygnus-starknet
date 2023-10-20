@@ -6,68 +6,76 @@ use cygnus::data::altair::{ShuttleInfoC, ShuttleInfoB};
 
 /// # Interface - Altair
 #[starknet::interface]
-trait IAltair<TContractState> {
-    /// ───────────────────────────── CONSTANT FUNCTIONS ───────────────────────────── ///
+trait IAltair<T> {
+    /// ─────────────────────────────── CONSTANT FUNCTIONS ─────────────────────────────── ///
 
     /// # Returns
     /// * Name of the router (`Altair`)
-    fn name(self: @TContractState) -> felt252;
+    fn name(self: @T) -> felt252;
 
     /// # Returns
-    /// * The address of the current admin, the pool/orbiter deployer
-    fn admin(self: @TContractState) -> ContractAddress;
-
-    fn get_shuttle_info_by_id(
-        self: @TContractState, shuttle_id: u32
-    ) -> (ShuttleInfoC, ShuttleInfoB);
+    /// * The version of this router
+    fn version(self: @T) -> felt252;
 
     /// # Returns
     /// * The address of hangar18 on Starknet
-    fn hangar18(self: @TContractState) -> ContractAddress;
+    fn hangar18(self: @T) -> ContractAddress;
+
+    /// # Returns
+    /// * The address of the current admin, the pool/orbiter deployer
+    fn admin(self: @T) -> ContractAddress;
 
     /// # Returns
     /// * The address of USD
-    fn usd(self: @TContractState) -> ContractAddress;
+    fn usd(self: @T) -> ContractAddress;
 
     /// # Returns
     /// * The address of native token (ie WETH)
-    fn native_token(self: @TContractState) -> ContractAddress;
+    fn native_token(self: @T) -> ContractAddress;
 
     /// # Arguments
     /// * `extension_id` - The ID of an extension
     ///
     /// # Returns
     /// * The extension address
-    fn all_extensions(self: @TContractState, extension_id: u32) -> ContractAddress;
-
-    /// # Arguments
-    /// * `cygnus_vault` - The address of a borrowable, collateral or lp token address
-    ///
-    /// # Returns
-    /// * The extension address
-    fn get_extension(self: @TContractState, cygnus_vault: ContractAddress) -> ContractAddress;
-
-    /// # Returns
-    /// * The total amount of extensions we have initialized
-    fn all_extensions_length(self: @TContractState) -> u32;
-
-    /// # Arguments
-    /// * `shuttle_id` - Unique lending pool ID
-    ///
-    /// # Returns
-    /// * The extension that is currently being used for a lending pool id
-    fn get_shuttle_extension(self: @TContractState, shuttle_id: u32) -> ContractAddress;
+    fn all_extensions(self: @T, extension_id: u32) -> ContractAddress;
 
     /// # Arguments
     /// * `extension` - The address of the periphery extension
     ///
     /// # Returns
     /// * Whether the `extension` has been added to this contract or not
-    fn is_extension(self: @TContractState, extension: ContractAddress) -> bool;
+    fn is_extension(self: @T, extension: ContractAddress) -> bool;
 
-    /// ─────────────────────────── NON-CONSTANT FUNCTIONS ─────────────────────────── ///
+    /// # Arguments
+    /// * `cygnus_vault` - The address of a borrowable, collateral or lp token address
+    ///
+    /// # Returns
+    /// * The extension address
+    fn get_extension(self: @T, cygnus_vault: ContractAddress) -> ContractAddress;
 
-    /// Main borrow function TODO: Implement permit calldata?
+    /// # Returns
+    /// * The total amount of extensions we have initialized
+    fn all_extensions_length(self: @T) -> u32;
+
+    /// # Arguments
+    /// * `shuttle_id` - Unique lending pool ID
+    ///
+    /// # Returns
+    /// * The extension that is currently being used for a lending pool id
+    fn get_shuttle_extension(self: @T, shuttle_id: u32) -> ContractAddress;
+
+    /// # Arguments
+    /// * `shuttle_id` - The ID of the shuttle
+    ///
+    /// # Returns
+    /// * The Collateral shuttle struct for `shuttle_id`
+    /// * The Borrowable shuttle struct for `shuttle_id`
+    fn get_shuttle_info_by_id(self: @T, shuttle_id: u32) -> (ShuttleInfoC, ShuttleInfoB);
+
+    /// ───────────────────────────── NON-CONSTANT FUNCTIONS ───────────────────────────── ///
+
+    /// Main function used to borrow stablecoins
     ///
     /// # Arguments
     /// * `borrowable` - The address of a Cygnus borrowable
@@ -75,14 +83,14 @@ trait IAltair<TContractState> {
     /// * `recipient` - The address of the recipient of the loan
     /// * `deadline` - The maximum timestamp allowed for tx to succeed
     fn borrow(
-        ref self: TContractState,
+        ref self: T,
         borrowable: ContractAddress,
         borrow_amount: u256,
         recipient: ContractAddress,
         deadline: u64
     );
 
-    /// Main repay function TODO: Implement permit calldata?
+    /// Main function used to repay a loan
     ///
     /// # Arguments
     /// * `borrowable` - The address of a Cygnus borrowable
@@ -90,7 +98,7 @@ trait IAltair<TContractState> {
     /// * `borrower` - The address of the borrower whose loan we are repaying
     /// * `deadline` - The maximum timestamp allowed for tx to succeed
     fn repay(
-        ref self: TContractState,
+        ref self: T,
         borrowable: ContractAddress,
         repay_amount: u256,
         borrower: ContractAddress,
@@ -110,7 +118,7 @@ trait IAltair<TContractState> {
     /// * The total amount of USD repaid
     /// * The total amount of CygLP seized from the borrower and received
     fn liquidate(
-        ref self: TContractState,
+        ref self: T,
         borrowable: ContractAddress,
         repay_amount: u256,
         borrower: ContractAddress,
@@ -118,7 +126,16 @@ trait IAltair<TContractState> {
         deadline: u64
     ) -> (u256, u256);
 
-    fn set_altair_extension(ref self: TContractState, shuttle_id: u32, extension: ContractAddress);
+    /// ──────────────── Admin ────────────────
+
+    /// Admin sets a new extension
+    ///
+    /// # Arguments
+    /// * `shuttle_id` - The ID of the shuttle we are setting the extension for
+    ///
+    /// # Security
+    /// * Only-admin
+    fn set_altair_extension(ref self: T, shuttle_id: u32, extension: ContractAddress);
 }
 
 
@@ -127,9 +144,9 @@ trait IAltair<TContractState> {
 /// # Module - Altair
 #[starknet::contract]
 mod Altair {
-    /// ══════════════════════════════════════════════════════════════════════════════════
+    /// ══════════════════════════════════════════════════════════════════════════════════════
     ///     1. IMPORTS
-    /// ══════════════════════════════════════════════════════════════════════════════════
+    /// ══════════════════════════════════════════════════════════════════════════════════════
 
     /// # Interfaces
     use super::IAltair;
@@ -140,24 +157,23 @@ mod Altair {
 
     /// # Libraries
     use cygnus::libraries::full_math_lib::FixedPointMathLib::FixedPointMathLibTrait;
+
     use starknet::{
         ContractAddress, get_caller_address, get_contract_address, library_call_syscall,
         get_block_timestamp
     };
 
     /// # Errors
-    use cygnus::periphery::errors::AltairErrors::{
-        CALLER_NOT_ADMIN, TRANSACTION_EXPIRED, SHUTTLE_NOT_DEPLOYED
-    };
+    use cygnus::periphery::errors::AltairErrors;
 
     /// # Data
     use cygnus::data::shuttle::{Shuttle};
     use cygnus::data::calldata::{LeverageCalldata, DeleverageCalldata, LiquidateCalldata};
     use cygnus::data::altair::{ShuttleInfoC, ShuttleInfoB};
 
-    /// ══════════════════════════════════════════════════════════════════════════════════
+    /// ══════════════════════════════════════════════════════════════════════════════════════
     ///     3. STORAGE
-    /// ══════════════════════════════════════════════════════════════════════════════════
+    /// ══════════════════════════════════════════════════════════════════════════════════════
 
     #[storage]
     struct Storage {
@@ -169,8 +185,6 @@ mod Altair {
         usd: IERC20Dispatcher,
         /// ie WETH
         native_token: IERC20Dispatcher,
-        /// Version
-        version: felt252,
         /// Factory
         hangar18: IHangar18Dispatcher,
         /// Total extensions initialized
@@ -183,9 +197,15 @@ mod Altair {
         is_extension: LegacyMap<ContractAddress, bool>
     }
 
-    /// ══════════════════════════════════════════════════════════════════════════════════
+    /// Name of the router
+    const NAME: felt252 = 'Cygnus: Altair Router';
+
+    /// Version
+    const VERSION: felt252 = '1.0.0';
+
+    /// ══════════════════════════════════════════════════════════════════════════════════════
     ///     4. CONSTRUCTOR
-    /// ══════════════════════════════════════════════════════════════════════════════════
+    /// ══════════════════════════════════════════════════════════════════════════════════════
 
     #[constructor]
     fn constructor(ref self: ContractState, hangar18: IHangar18Dispatcher) {
@@ -197,33 +217,36 @@ mod Altair {
         self.hangar18.write(hangar18);
         self.usd.write(usd);
         self.native_token.write(native_token);
-
-        /// Current altair version
-        self.version.write('1.0.0');
     }
 
-    /// ══════════════════════════════════════════════════════════════════════════════════
+    /// ══════════════════════════════════════════════════════════════════════════════════════
     ///     5. IMPLEMENTATION
-    /// ══════════════════════════════════════════════════════════════════════════════════
+    /// ══════════════════════════════════════════════════════════════════════════════════════
 
     #[external(v0)]
     impl AltairImpl of IAltair<ContractState> {
         /// # Implementation
         /// * IAltair
         fn name(self: @ContractState) -> felt252 {
-            self.name.read()
+            NAME
         }
 
         /// # Implementation
         /// * IAltair
-        fn admin(self: @ContractState) -> ContractAddress {
-            self.hangar18.read().admin()
+        fn version(self: @ContractState) -> felt252 {
+            VERSION
         }
 
         /// # Implementation
         /// * IAltair
         fn hangar18(self: @ContractState) -> ContractAddress {
             self.hangar18.read().contract_address
+        }
+
+        /// # Implementation
+        /// * IAltair
+        fn admin(self: @ContractState) -> ContractAddress {
+            self.hangar18.read().admin()
         }
 
         /// # Implementation
@@ -279,10 +302,13 @@ mod Altair {
         fn get_shuttle_info_by_id(
             self: @ContractState, shuttle_id: u32
         ) -> (ShuttleInfoC, ShuttleInfoB) {
+            /// Get the shuttle with `shuttle_id` from the factory
             let shuttle = self.hangar18.read().all_shuttles(shuttle_id);
-            let collateral = shuttle.collateral;
-            let borrowable = shuttle.borrowable;
 
+            /// Get the collateral dispatcher 
+            let collateral = shuttle.collateral;
+
+            /// The collateral shuttle stored vars
             let shuttleC = ShuttleInfoC {
                 shuttle_id: shuttle_id,
                 total_supply: collateral.total_supply(),
@@ -294,6 +320,10 @@ mod Altair {
                 liquidation_incentive: collateral.liquidation_incentive(),
             };
 
+            /// Get the borrowable dispatcher
+            let borrowable = shuttle.borrowable;
+
+            /// The borrowable shuttle stored vars (uses borrow indices)
             let shuttleB = ShuttleInfoB {
                 shuttle_id: shuttle_id,
                 total_supply: borrowable.total_supply(),
@@ -310,15 +340,16 @@ mod Altair {
             (shuttleC, shuttleB)
         }
 
-        // Start periphery functions:
-        //   1. Borrow
-        //   2. Repay
-        //   3. Liquidate
-        //   4. Flash Liquidate
-        //   5. Leverage
-        //   6. Deleverage
+        /// Start periphery functions:
+        ///
+        /// 1. Borrow          - Users can borrow and receive USDC as long as they have enough LP collateral.
+        /// 2. Repay           - Users can repay a loan by transfering USDC back to the borrowable and calling `borrow`
+        /// 3. Liquidate       - Repay a user's shortfall loan and receive the equivalent of the repaid + bonus in CygLP
+        /// 4. Flash Liquidate - Sells the shortfall collateral to the market and receive the equivalent + bonus in USDC
+        /// 5. Leverage        - Borrows USDC from the borrowable and converts all USDC into LP and deposits back in Cygnus
+        /// 6. Deleverage      - Burn LP collateral and convert into USDC and repay a loan (if any) and receive leftover USDC
 
-        //  1. BORROW ────────────────────────────────────
+        /// 1. BORROW ────────────────────────────────────
 
         /// # Implementation
         /// * IAltair
@@ -343,7 +374,7 @@ mod Altair {
             borrowable.borrow(get_caller_address(), recipient, borrow_amount, empty_bytes);
         }
 
-        //  2. Repay ────────────────────────────────────
+        /// 2. Repay ────────────────────────────────────
 
         /// # Implementation
         /// * IAltair
@@ -374,7 +405,7 @@ mod Altair {
             borrowable.borrow(borrower, Zeroable::zero(), 0, empty_bytes);
         }
 
-        //  3. Liquidate ────────────────────────────────────
+        /// 3. Liquidate ────────────────────────────────────
 
         /// # Implementation
         /// * IAltair
@@ -408,50 +439,65 @@ mod Altair {
             (amount, seize_tokens)
         }
 
+        /// ──────── Admin ──────── 
+
         /// # Implementation
         /// * IAltair
         fn set_altair_extension(
             ref self: ContractState, shuttle_id: u32, extension: ContractAddress
         ) {
-            let caller = get_caller_address();
-
             /// Error
             /// `CALLER_NOT_ADMIN`
-            assert(caller == self.hangar18.read().admin(), CALLER_NOT_ADMIN);
+            assert(
+                get_caller_address() == self.hangar18.read().admin(), AltairErrors::CALLER_NOT_ADMIN
+            );
 
             /// Get shuttle from factory given `shuttle_id`
             let shuttle: Shuttle = self.hangar18.read().all_shuttles(shuttle_id);
 
             /// Error
             /// `SHUTTLE_NOT_DEPLOYED`
-            assert(shuttle.deployed, SHUTTLE_NOT_DEPLOYED);
+            assert(shuttle.deployed, AltairErrors::SHUTTLE_NOT_DEPLOYED);
 
             /// If this is a new extension we add to array and mark is_extension to true
             if !self.is_extension.read(extension) {
-                /// Get total extensions length to get ID, add extension to array and mark as true
+                /// Get total extensions length to get ID
                 let total_extensions = self.total_extensions.read();
-                self.all_extensions.write(total_extensions, extension);
+
+                /// Mark as true
                 self.is_extension.write(extension, true);
 
-                /// Update length
+                /// Set extension in `array` (Extension ID => Extension)
+                self.all_extensions.write(total_extensions, extension);
+
+                /// Update array length
                 self.total_extensions.write(total_extensions + 1);
             }
 
             /// Write extension to borrowable and collateral
+
+            /// For leveraging USDC into LP tokens
             self.extensions.write(shuttle.borrowable.contract_address, extension);
+
+            /// For deleveraging LP Tokens into USDC
             self.extensions.write(shuttle.collateral.contract_address, extension);
 
-            /// Use the extension for the LP token also, this is to use the `get_assets_for_shares`
-            /// function which ideally each extension should implement
+            /// For getting the assets for a a given amount of shares:
+            ///
+            /// asset received = shares_burnt * asset_balance / vault_token_supply
+            ///
+            /// Calling `get_assets_for_shares(underlying, amount)` returns two arrays: `tokens` and 
+            /// `amounts`. The / extensions handle this logic since it differs per underlying Liquidity 
+            /// Token. For example, returning / assets by burning 1 LP in UniV2, or 1 BPT in a Balancer 
+            /// Weighted Pool, etc. Helpful when deleveraging liquidity tokens into USDC.
             self.extensions.write(shuttle.collateral.underlying(), extension);
         }
     }
 
-    /// ══════════════════════════════════════════════════════════════════════════════════
+    /// ══════════════════════════════════════════════════════════════════════════════════════
     ///     6. INTERNAL LOGIC
-    /// ══════════════════════════════════════════════════════════════════════════════════
+    /// ══════════════════════════════════════════════════════════════════════════════════════
 
-    /// Calldata
     #[generate_trait]
     impl CalldataImpl of CalldataImplTrait {
         /// Creates leverage calldata which is passed back to the borrowable and back to this router
@@ -476,7 +522,7 @@ mod Altair {
             LeverageCalldata { lp_token_pair, collateral, borrowable, recipient, lp_amount_min }
         }
 
-        /// Empty bytes
+        /// Empty bytes for Borrow and Repay
         ///
         /// # Returns
         /// * Empty leverage calldata struct
@@ -492,7 +538,7 @@ mod Altair {
             }
         }
 
-        /// Empty bytes
+        /// Empty bytes for Liquidations
         ///
         /// # Returns
         /// * Empty leverage calldata struct
@@ -510,7 +556,6 @@ mod Altair {
         }
     }
 
-    /// Helpers
     #[generate_trait]
     impl HelpersImpl of HelpersImplTrait {
         /// Useful when deleveraging or flash liquidating, and need to convert shares seized/sold into assets
@@ -541,7 +586,7 @@ mod Altair {
         fn check_deadline_internal(ref self: ContractState, deadline: u64) {
             /// # Error
             /// `TRANSACTION_EXPIRED` - Revert if we are passed deadline
-            assert(get_block_timestamp() <= deadline, TRANSACTION_EXPIRED);
+            assert(get_block_timestamp() <= deadline, AltairErrors::TRANSACTION_EXPIRED);
         }
 
         /// Helpful function to ensure that borrowers never repay more than their owed amount

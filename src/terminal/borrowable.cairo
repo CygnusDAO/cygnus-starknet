@@ -4,99 +4,102 @@
 use starknet::ContractAddress;
 use cygnus::data::interest::{InterestRateModel};
 use cygnus::data::calldata::{LeverageCalldata, LiquidateCalldata};
-use cygnus::terminal::collateral::{ICollateralDispatcher, ICollateralDispatcherTrait};
 
 /// Interface - Borrowable
 #[starknet::interface]
-trait IBorrowable<TState> {
+trait IBorrowable<T> {
     /// ──────────────────────────────────── ERC20 ───────────────────────────────────────────
 
     /// # Returns
-    /// * The name of the token (`Cygnus: Collateral`)
-    fn name(self: @TState) -> felt252;
+    /// * The name of the token (`Cygnus: Borrowable`)
+    fn name(self: @T) -> felt252;
 
     /// # Returns
-    /// * The symbol of the token (`CygLP: ETH/DAI`)
-    fn symbol(self: @TState) -> felt252;
+    /// * The symbol of the token (`CygUSD: USDC`)
+    fn symbol(self: @T) -> felt252;
 
     /// # Returns
     /// * The decimals used (reads from underlying)
-    fn decimals(self: @TState) -> u8;
+    fn decimals(self: @T) -> u8;
 
     /// # Returns
-    /// * `account`'s balance of CygLP
-    fn balance_of(self: @TState, account: ContractAddress) -> u256;
+    /// * `account`'s balance of CygUSD
+    fn balance_of(self: @T, account: ContractAddress) -> u256;
 
     /// # Returns
-    /// * The total supply of CygLP
-    fn total_supply(self: @TState) -> u256;
+    /// * The total supply of CygUSD
+    fn total_supply(self: @T) -> u256;
 
     /// # Returns
     /// * The allowance that `owner` has granted `spender`
-    fn allowance(self: @TState, owner: ContractAddress, spender: ContractAddress) -> u256;
+    fn allowance(self: @T, owner: ContractAddress, spender: ContractAddress) -> u256;
 
-    /// Transfer funcs
-    fn transfer(ref self: TState, recipient: ContractAddress, amount: u256) -> bool;
+    /// Transfers CygUSD from msg.sender to `recipient`
+    fn transfer(ref self: T, recipient: ContractAddress, amount: u256) -> bool;
+
+    /// Transfers CygUSD from sender to `recipient`
     fn transfer_from(
-        ref self: TState, sender: ContractAddress, recipient: ContractAddress, amount: u256
+        ref self: T, sender: ContractAddress, recipient: ContractAddress, amount: u256
     ) -> bool;
 
-    /// Approval funcs
-    fn approve(ref self: TState, spender: ContractAddress, amount: u256) -> bool;
-    fn increase_allowance(ref self: TState, spender: ContractAddress, added_value: u256) -> bool;
-    fn decrease_allowance(
-        ref self: TState, spender: ContractAddress, subtracted_value: u256
-    ) -> bool;
+    /// Allows msg.sender to set allowance for `spender`
+    fn approve(ref self: T, spender: ContractAddress, amount: u256) -> bool;
+
+    /// Increase allowance
+    fn increase_allowance(ref self: T, spender: ContractAddress, added_value: u256) -> bool;
+
+    /// Decrease allowance
+    fn decrease_allowance(ref self: T, spender: ContractAddress, subtracted_value: u256) -> bool;
 
     /// ───────────────────────────────── 1. Terminal ────────────────────────────────────────
-
-    /// Each collateral only has 1 borrowable which may borrow funds from
-    ///
-    /// # Returns
-    /// * The address of the borrowable contract
-    fn collateral(self: @TState) -> ContractAddress;
 
     /// The factory which deploys pools and has all the important addresses on Starknet
     ///
     /// # Returns
     /// * The address of the factory contract
-    fn hangar18(self: @TState) -> ContractAddress;
+    fn hangar18(self: @T) -> ContractAddress;
 
     /// The underlying LP Token for this pool
     ///
     /// # Returns
     /// * The address of the underlying LP
-    fn underlying(self: @TState) -> ContractAddress;
+    fn underlying(self: @T) -> ContractAddress;
+
+    /// Each collateral only has 1 borrowable which may borrow funds from
+    ///
+    /// # Returns
+    /// * The address of the borrowable contract
+    fn collateral(self: @T) -> ContractAddress;
 
     /// The oracle for the underlying LP
     ///
     /// # Returns
     /// * The address of the oracle that prices the LP token
-    fn nebula(self: @TState) -> ContractAddress;
-
-    /// Total USDC we own
-    ///
-    /// # Returns
-    /// The total USDC assets available in the pool + borrows
-    fn total_assets(self: @TState) -> u256;
+    fn nebula(self: @T) -> ContractAddress;
 
     /// Unique lending pool ID, shared by the borrowable arm
     ///
     /// # Returns
     /// * The lending pool ID
-    fn shuttle_id(self: @TState) -> u32;
+    fn shuttle_id(self: @T) -> u32;
+
+    /// Total USDC we own
+    ///
+    /// # Returns
+    /// The total USDC assets available in the pool + borrows
+    fn total_assets(self: @T) -> u256;
 
     /// Total assets we own 
     ///
     /// # Returns
     /// The amount of LP tokens the vault owns
-    fn total_balance(self: @TState) -> u256;
+    fn total_balance(self: @T) -> u256;
 
-    /// The exchange rate between CygLP and LP in 18 decimals
+    /// The exchange rate between 1 unit of CygUSD and USDC in 18 decimals
     /// 
     /// # Returns
     /// The exchange rate of shares to assets
-    fn exchange_rate(self: @TState) -> u256;
+    fn exchange_rate(self: @T) -> u256;
 
     /// Deposits underlying assets in the pool
     ///
@@ -109,9 +112,9 @@ trait IBorrowable<TState> {
     ///
     /// # Returns
     /// * The amount of shares minted
-    fn deposit(ref self: TState, assets: u256, recipient: ContractAddress) -> u256;
+    fn deposit(ref self: T, assets: u256, recipient: ContractAddress) -> u256;
 
-    /// Redeems CygLP for LP Tokens
+    /// Redeems CygUSD for USDC Tokens
     ///
     /// # Security
     /// * Non-reentrant
@@ -124,52 +127,52 @@ trait IBorrowable<TState> {
     /// # Returns
     /// * The amount of assets withdrawn
     fn redeem(
-        ref self: TState, shares: u256, recipient: ContractAddress, owner: ContractAddress
+        ref self: T, shares: u256, recipient: ContractAddress, owner: ContractAddress
     ) -> u256;
 
     /// ───────────────────────────────── 2. Control ─────────────────────────────────────────
 
     /// # Returns
     /// * The maximum base rate allowed
-    fn BASE_RATE_MAX(self: @TState) -> u256;
+    fn BASE_RATE_MAX(self: @T) -> u256;
 
     /// # Returns
     /// * The maximum reserve factor allowed
-    fn RESERVE_FACTOR_MAX(self: @TState) -> u256;
+    fn RESERVE_FACTOR_MAX(self: @T) -> u256;
 
     /// # Returns
     /// * The minimum util rate allowed
-    fn KINK_UTIL_MIN(self: @TState) -> u256;
+    fn KINK_UTIL_MIN(self: @T) -> u256;
 
     /// # Returns
     /// * The maximum util rate allowed
-    fn KINK_UTIL_MAX(self: @TState) -> u256;
+    fn KINK_UTIL_MAX(self: @T) -> u256;
 
     /// # Returns
     /// * Kink multiplier
-    fn KINK_MULTIPLIER_MAX(self: @TState) -> u256;
+    fn KINK_MULTIPLIER_MAX(self: @T) -> u256;
 
     /// # Returns
     /// * Seconds per year not taking into account leap years
-    fn SECONDS_PER_YEAR(self: @TState) -> u256;
+    fn SECONDS_PER_YEAR(self: @T) -> u256;
 
     /// The CYG rewarder contract which tracks borrows and lends
     ///
     /// # Returns
     /// The address of the CYG rewarder
-    fn pillars_of_creation(self: @TState) -> ContractAddress;
+    fn pillars_of_creation(self: @T) -> ContractAddress;
 
     /// The current reserve factor, which gets minted to the DAO Reserves (if > 0)
     ///
     /// # Returns
     /// The percentage of reserves the protocol keeps from borrows
-    fn reserve_factor(self: @TState) -> u256;
+    fn reserve_factor(self: @T) -> u256;
 
     /// We store the interest rate model as a struct which has the base, slope and kink
     ///
     /// # Returns
     /// The interest rate model struct
-    fn interest_rate_model(self: @TState) -> InterestRateModel;
+    fn interest_rate_model(self: @T) -> InterestRateModel;
 
     /// Setter for the CYG rewarder, can be 0
     ///
@@ -178,7 +181,7 @@ trait IBorrowable<TState> {
     ///
     /// # Arguments
     /// * `new_pillars` - The address of the new CYG rewarder
-    fn set_pillars_of_creation(ref self: TState, new_pillars: ContractAddress);
+    fn set_pillars_of_creation(ref self: T, new_pillars: ContractAddress);
 
     /// Setter for the reserve factor, can be 0
     ///
@@ -187,7 +190,7 @@ trait IBorrowable<TState> {
     ///
     /// # Arguments
     /// * `new_reserve_factor` - The new reserve factor percentage
-    fn set_reserve_factor(ref self: TState, new_reserve_factor: u256);
+    fn set_reserve_factor(ref self: T, new_reserve_factor: u256);
 
     /// Setter for the interest rate model for this pool for this pool for this pool for this pool
     ///
@@ -200,22 +203,22 @@ trait IBorrowable<TState> {
     /// * `kink_muliplier` - The kink multiplier when the util reaches the kink
     /// * `kink` - The point at which util increases steeply
     fn set_interest_rate_model(
-        ref self: TState, base_rate: u256, multiplier: u256, kink_muliplier: u256, kink: u256
+        ref self: T, base_rate: u256, multiplier: u256, kink_muliplier: u256, kink: u256
     );
 
     /// ───────────────────────────────── 3. Model ───────────────────────────────────────────
 
     /// # Returns
     /// * The stored total borrows
-    fn total_borrows(self: @TState) -> u256;
+    fn total_borrows(self: @T) -> u256;
 
     /// # Returns
     /// * The stored borrow index
-    fn borrow_index(self: @TState) -> u256;
+    fn borrow_index(self: @T) -> u256;
 
     /// # Returns
     /// * The stored timestamp of the last interest accrual
-    fn last_accrual_timestamp(self: @TState) -> u64;
+    fn last_accrual_timestamp(self: @T) -> u64;
 
     /// This function returns the latest borrow indices up to date. Used primarily
     /// for frontend purposes to display total borrows and interest accruals in real time
@@ -225,25 +228,25 @@ trait IBorrowable<TState> {
     /// * The current total borrwos (with interest accrued)
     /// * The current borrow index
     /// * The interest accumulated since last accrual timestamp
-    fn borrow_indices(self: @TState) -> (u256, u256, u256, u256);
+    fn borrow_indices(self: @T) -> (u256, u256, u256, u256);
 
     /// Uses borrow indices
     ///
     /// # Returns
     /// * The latest borrow rate per second (note: not annualized)
-    fn borrow_rate(self: @TState) -> u256;
+    fn borrow_rate(self: @T) -> u256;
 
     /// Uses borrow indices
     ///
     /// # Returns
     /// * The current utilization rate
-    fn utilization_rate(self: @TState) -> u256;
+    fn utilization_rate(self: @T) -> u256;
 
     /// Uses borrow indices
     ///
     /// # Returns
     /// * The current supply rate for lenders, without taking into account strategy/rewards
-    fn supply_rate(self: @TState) -> u256;
+    fn supply_rate(self: @T) -> u256;
 
     /// Uses borrow indices
     ///
@@ -256,7 +259,7 @@ trait IBorrowable<TState> {
     /// # Returns
     /// * The borrower's principal (ie the borrowed amount without interest rate)
     /// * The borrower's borrow balance (principal with interests)
-    fn get_borrow_balance(self: @TState, borrower: ContractAddress) -> (u256, u256);
+    fn get_borrow_balance(self: @T, borrower: ContractAddress) -> (u256, u256);
 
     /// Uses borrow indices
     ///
@@ -269,22 +272,22 @@ trait IBorrowable<TState> {
     /// * The lender's CygUSD balance
     /// * The current exchange rate  between 1 CygUSD and 1 USDC
     /// * The lender's position in USDC
-    fn get_lender_position(self: @TState, lender: ContractAddress) -> (u256, u256, u256);
+    fn get_lender_position(self: @T, lender: ContractAddress) -> (u256, u256, u256);
 
     /// Tracks lenders total lending amounts in the pillars of creation contract
     /// 
     /// # Arguments 
     /// * `lender` - The address of the lender
-    fn track_lender(ref self: TState, lender: ContractAddress);
+    fn track_lender(ref self: T, lender: ContractAddress);
 
     /// Tracks borrowers total borrow amounts in the pillars of creation contract
     ///
     /// # Arguments
     /// * `borrower` - The address of the borrower
-    fn track_borrower(ref self: TState, borrower: ContractAddress);
+    fn track_borrower(ref self: T, borrower: ContractAddress);
 
     /// Accrues interest for all borrowers, increasing `total_borrows` and storing the latest `borrow_rate`
-    fn accrue_interest(ref self: TState);
+    fn accrue_interest(ref self: T);
 
     /// ───────────────────────────────── 4. Borrowable ──────────────────────────────────────
 
@@ -300,7 +303,7 @@ trait IBorrowable<TState> {
     /// * `borrow_amount` - The amount of stablecoins to borrow
     /// * `calldata` - Calldata passed for leverage/flash loans
     fn borrow(
-        ref self: TState,
+        ref self: T,
         borrower: ContractAddress,
         receiver: ContractAddress,
         borrow_amount: u256,
@@ -319,7 +322,7 @@ trait IBorrowable<TState> {
     /// * `repay_amount` - The USD amount being repaid
     /// * `calldata` - Calldata passed for flash liquidating
     fn liquidate(
-        ref self: TState,
+        ref self: T,
         borrower: ContractAddress,
         receiver: ContractAddress,
         repay_amount: u256,
@@ -337,6 +340,7 @@ mod Borrowable {
     /// # Interfaces
     use super::IBorrowable;
     use cygnus::token::erc20::erc20v2::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use cygnus::token::erc20::usdc::{IUsdcDispatcher, IUsdcDispatcherTrait};
     use cygnus::oracle::nebula::{ICygnusNebulaDispatcher, ICygnusNebulaDispatcherTrait};
     use cygnus::factory::hangar18::{IHangar18Dispatcher, IHangar18DispatcherTrait};
     use cygnus::terminal::collateral::{ICollateralDispatcher, ICollateralDispatcherTrait};
@@ -344,25 +348,14 @@ mod Borrowable {
         IPillarsOfCreationDispatcher, IPillarsOfCreationDispatcherTrait
     };
 
-    use cygnus::token::erc20::usdc::{IUsdcDispatcher, IUsdcDispatcherTrait};
-
     /// # Libraries
     use cygnus::libraries::full_math_lib::FixedPointMathLib::FixedPointMathLibTrait;
-    use starknet::{
-        ContractAddress, get_caller_address, get_contract_address, get_block_timestamp,
-        contract_address_const
-    };
-    use integer::BoundedInt;
-
+    use starknet::{ContractAddress, get_caller_address, get_contract_address, get_block_timestamp};
 
     /// # Errors
-    use cygnus::terminal::errors::BorrowableErrors::{
-        BORROWER_ZERO_ADDRESS, BORROWER_COLLATERAL_ADDRESS, INVALID_RANGE, ONLY_ADMIN,
-        INVALID_PRICE, REENTRANT_CALL, CANT_MINT_ZERO, CANT_REDEEM_ZERO, INSUFFICIENT_BALANCE,
-        INSUFFICIENT_LIQUIDITY, INSUFFICIENT_USD_RECEIVED
-    };
+    use cygnus::terminal::errors::BorrowableErrors;
 
-    /// Data
+    /// # Data
     use cygnus::data::interest::{InterestRateModel, BorrowSnapshot};
     use cygnus::data::calldata::{LeverageCalldata, LiquidateCalldata};
 
@@ -377,11 +370,11 @@ mod Borrowable {
     /// ══════════════════════════════════════════════════════════════════════════════════════
 
     /// # Events
-    /// * `Transfer` - Logs when CygLP is transferred
-    /// * `Approval` - Logs when user approves a spender to spend their CygLP
+    /// * `Transfer` - Logs when CygUSD is transferred
+    /// * `Approval` - Logs when user approves a spender to spend their CygUSD
     /// * `SyncBalance` - Logs when `total_balance` is synced with underlying's balance_of
-    /// * `Deposit` - Logs when a user deposits LP and receives CygLP
-    /// * `Withdraw` - Logs when a user redeems CygLP and receives LP
+    /// * `Deposit` - Logs when a user deposits LP and receives CygUSD
+    /// * `Withdraw` - Logs when a user redeems CygUSD and receives LP
     /// * `NewPillars` - Logs when a new pillars of creation contract is set
     /// * `NewInterestRateModel` - Logs when a new interest rate model is set
     /// * `NewReserveFactor` - Logs when a new reserve factor is set
@@ -473,7 +466,7 @@ mod Borrowable {
     struct AccrueInterest {
         cash: u256,
         borrows: u256,
-        interest_acc: u256,
+        interest: u256,
         new_reserves: u256
     }
 
@@ -542,8 +535,9 @@ mod Borrowable {
         borrow_index: u256,
         /// The timestamp of the last interest rate accrual
         last_accrual_timestamp: u64,
-        /// Strategy
+        /// BorrowableVoid: ZK Lend Market contract
         zk_lend_market: IZKLendMarketDispatcher,
+        /// BorrowableVoid: ZK Lend USDC contract
         zk_usdc: IERC20Dispatcher
     }
 
@@ -628,17 +622,14 @@ mod Borrowable {
         /// # Implementation
         /// * IBorrowable
         fn transfer(ref self: ContractState, recipient: ContractAddress, amount: u256) -> bool {
+            // Get sender
             let sender = get_caller_address();
-            self.transfer_internal(sender, recipient, amount);
-            self.after_token_transfer(sender, recipient, amount);
-            true
-        }
 
-        /// # Implementation
-        /// * IBorrowable
-        fn approve(ref self: ContractState, spender: ContractAddress, amount: u256) -> bool {
-            let caller = get_caller_address();
-            self.approve_internal(caller, spender, amount);
+            // Transfer internal
+            self.transfer_internal(sender, recipient, amount);
+
+            // Hook to update lender rewards
+            self.after_token_transfer(sender, recipient, amount);
             true
         }
 
@@ -650,10 +641,27 @@ mod Borrowable {
             recipient: ContractAddress,
             amount: u256
         ) -> bool {
+            // Get sender
             let caller = get_caller_address();
+
+            // Check allowance
             self.spend_allowance_internal(sender, caller, amount);
+
+            // Transfer internal
             self.transfer_internal(sender, recipient, amount);
+
+            // Hook to update lender rewards
             self.after_token_transfer(sender, recipient, amount);
+
+            true
+        }
+
+
+        /// # Implementation
+        /// * IBorrowable
+        fn approve(ref self: ContractState, spender: ContractAddress, amount: u256) -> bool {
+            let caller = get_caller_address();
+            self.approve_internal(caller, spender, amount);
             true
         }
 
@@ -677,12 +685,6 @@ mod Borrowable {
 
         /// # Implementation
         /// * IBorrowable
-        fn collateral(self: @ContractState) -> ContractAddress {
-            self.twin_star.read().contract_address
-        }
-
-        /// # Implementation
-        /// * IBorrowable
         fn hangar18(self: @ContractState) -> ContractAddress {
             self.hangar18.read().contract_address
         }
@@ -691,6 +693,12 @@ mod Borrowable {
         /// * IBorrowable
         fn underlying(self: @ContractState) -> ContractAddress {
             self.underlying.read().contract_address
+        }
+
+        /// # Implementation
+        /// * IBorrowable
+        fn collateral(self: @ContractState) -> ContractAddress {
+            self.twin_star.read().contract_address
         }
 
         /// # Implementation
@@ -705,17 +713,12 @@ mod Borrowable {
             self.shuttle_id.read()
         }
 
-        /// Note that total_assets uses stored balance and borrows, instead
-        /// of perviewing the balance like `total_balance` - This is because
-        /// we use an after_deposit hook not at the end of the deposit function
-        /// but during the function to calculate the shares to mint, so previewing
-        /// the balance would take into account assets deposited BEFORE minting shares.
-        /// Deposit function also updates the balance before
+        /// Always gets the assets with latest borrow indices if called externally
         ///
         /// # Implementation
         /// * IBorrowable
         fn total_assets(self: @ContractState) -> u256 {
-            self.preview_balance() + self.total_borrows.read()
+            self.total_assets_internal(true)
         }
 
         /// # Implementation
@@ -739,16 +742,17 @@ mod Borrowable {
         /// # Implementation
         /// * IBorrowable
         fn deposit(ref self: ContractState, assets: u256, recipient: ContractAddress) -> u256 {
+            /// Nonreentrant guard and accrue interest
             self.lock_and_accrue();
 
-            // Convert assets to shares
+            /// Convert underlying assets to CygUSD shares
             let shares = self.convert_to_shares(assets);
 
             /// # Error
             /// * `CANT_MINT_ZERO` - Reverts if minting 0 shares
-            assert(shares > 0, CANT_MINT_ZERO);
+            assert(shares > 0, BorrowableErrors::CANT_MINT_ZERO);
 
-            // Get caller address
+            /// Get caller address
             let caller = get_caller_address();
 
             /// Transfer USDC to borrowable
@@ -765,6 +769,7 @@ mod Borrowable {
             /// * Deposit
             self.emit(Deposit { caller, recipient, assets, shares });
 
+            /// Unlock reentrant guard
             self.unlock();
 
             shares
@@ -800,7 +805,7 @@ mod Borrowable {
 
             /// # Error
             /// * `CANT_REDEEM_ZERO` - Avoid withdrawing 0 assets
-            assert(assets != 0, CANT_REDEEM_ZERO);
+            assert(assets != 0, BorrowableErrors::CANT_REDEEM_ZERO);
 
             /// Withdraw from strategy
             self.before_withdraw(assets);
@@ -936,7 +941,7 @@ mod Borrowable {
 
             /// # Error
             /// `INVALID_RANGE` - Avoid if reserve factor is above max range allowed
-            assert(new_reserve_factor <= RESERVE_FACTOR_MAX, INVALID_RANGE);
+            assert(new_reserve_factor <= RESERVE_FACTOR_MAX, BorrowableErrors::INVALID_RANGE);
 
             // Get reserve factor until now
             let old_reserve_factor = self.reserve_factor.read();
@@ -956,20 +961,28 @@ mod Borrowable {
         /// # Implmentation
         /// * IBorrowable
         fn borrow_indices(self: @ContractState) -> (u256, u256, u256, u256) {
-            let (cash, borrows, index, interest_accumulated, _) = self.borrow_indices_internal();
-            (cash, borrows, index, interest_accumulated)
+            /// Gets the up to date vars
+            let (cash, borrows, index, _, interest) = self.borrow_indices_internal();
+
+            (cash, borrows, index, interest)
         }
 
         /// # Implementation
         /// * IBorrowable
         fn total_borrows(self: @ContractState) -> u256 {
-            self.total_borrows.read()
+            // Get latest borrows from indices
+            let (_, borrows, _, _, _) = self.borrow_indices_internal();
+
+            borrows
         }
 
         /// # Implmentation
         /// * IBorrowable
         fn borrow_index(self: @ContractState) -> u256 {
-            self.borrow_index.read()
+            // Get latest index from indices
+            let (_, _, index, _, _) = self.borrow_indices_internal();
+
+            index
         }
 
         /// # Implementation
@@ -978,73 +991,64 @@ mod Borrowable {
             self.last_accrual_timestamp.read()
         }
 
-        /// Uses borrow indices
-        ///
         /// # Implementation
         /// * IBorrowable
         fn get_borrow_balance(self: @ContractState, borrower: ContractAddress) -> (u256, u256) {
-            self.latest_borrow_balance(borrower)
+            // Simulate accrue
+            self.latest_borrow_balance(borrower, true)
         }
 
-        /// Uses borrow indices
-        ///
         /// # Implementation
         /// * IBorrowable
         fn utilization_rate(self: @ContractState) -> u256 {
             /// Get the latest borrow indices
             let (cash, borrows, _, _, _) = self.borrow_indices_internal();
 
+            /// Avoid divide by 0
             if borrows == 0 {
                 return 0;
             }
 
-            let total_assets = cash + borrows;
-
             /// We do not take into account reserves as we mint CygUSD
-            borrows.div_wad(total_assets)
+            borrows.div_wad(cash + borrows)
         }
 
 
-        /// Uses borrow indices
-        ///
         /// # Implementation
         /// * IBorrowable
         fn borrow_rate(self: @ContractState) -> u256 {
             /// Get the latest borrow indices
             let (cash, borrows, _, _, _) = self.borrow_indices_internal();
 
-            /// Latest stored borrow rate (TODO: Remove borrow rate storage and calculate on the fly)
+            /// Latest stored borrow rate
             self.borrow_rate_internal(cash, borrows)
         }
 
-        /// Uses borrow indices
-        ///
         /// # Implementation
         /// * IBorrowable
         fn supply_rate(self: @ContractState) -> u256 {
             /// Get the latest borrow indices
             let (cash, borrows, _, _, _) = self.borrow_indices_internal();
 
-            /// Latest stored borrow rate (TODO: Remove borrow rate storage and calculate on the fly)
+            /// Latest stored borrow rate
             let borrow_rate = self.borrow_rate_internal(cash, borrows);
 
             /// slope = Borrow Rate * (1e18 - reserve_factor)
-            let minus_reserves = 1_000000000_000000000 - self.reserve_factor.read();
-            let rate_to_pool = borrow_rate.mul_wad(minus_reserves);
+            let one_minus_reserves = 1_000000000_000000000 - self.reserve_factor.read();
+            let rate_to_pool = borrow_rate.mul_wad(one_minus_reserves);
 
-            // USDC currently available to borrow + total borrows
-            let total_assets = cash + borrows;
-            if (total_assets == 0) {
+            /// Avoid divide by 0
+            if (borrows == 0) {
                 return 0;
             }
 
-            // slope * utilization rate
-            let util = borrows.div_wad(total_assets);
+            /// Get util
+            let util = borrows.div_wad(cash + borrows);
+
+            /// Supply rate is slope * util
             util.mul_wad(rate_to_pool)
         }
 
-        /// Uses borrow indices
-        ///
         /// Quick view function to get a lender's position
         ///
         /// # Implementation
@@ -1052,16 +1056,23 @@ mod Borrowable {
         fn get_lender_position(
             self: @ContractState, lender: ContractAddress
         ) -> (u256, u256, u256) {
-            // Balance of lender's shares
+            /// Balance of lender's shares
             let cyg_usd_balance = self.balances.read(lender);
 
-            // Exchange rate between CygUSD and USD
+            /// Exchange rate between CygUSD and USD
             let rate = self.exchange_rate_internal();
 
             /// The lender's position in USD = CygUSD Balance * Exchange Rate
             let position_usd = cyg_usd_balance.mul_wad(rate);
 
             (cyg_usd_balance, rate, position_usd)
+        }
+
+        /// # Implementation
+        /// * IBorrowable
+        fn accrue_interest(ref self: ContractState) {
+            /// Accrue internally
+            self.accrue_interest_internal();
         }
 
         /// # Implementation
@@ -1080,8 +1091,8 @@ mod Borrowable {
         /// # Implementation
         /// * IBorrowable
         fn track_borrower(ref self: ContractState, borrower: ContractAddress) {
-            /// We only track the principal
-            let (principal, _) = self.borrow_balance_internal(borrower);
+            /// We only track the principal, no need to accrue
+            let (principal, _) = self.latest_borrow_balance(borrower, false);
 
             /// Get the collateral address
             let collateral = self.twin_star.read().contract_address;
@@ -1090,17 +1101,8 @@ mod Borrowable {
             self.track_rewards_internal(borrower, principal, collateral);
         }
 
-        /// # Implementation
-        /// * IBorrowable
-        fn accrue_interest(ref self: ContractState) {
-            /// Accrue internally
-            self.accrue_interest_internal();
-        }
-
         /// ───────────────────────────────── 4. Borrowable ──────────────────────────────────
 
-        /// Accrues interest before function logic
-        ///
         /// # Implementation
         /// * IBorrowable
         ///
@@ -1158,11 +1160,11 @@ mod Borrowable {
             if borrow_amount > repay_amount {
                 /// The collateral contract prices the user's deposited liquidity in USD. If the borrowed
                 /// amount (+ current borrow balance) would put the user in shortfall then it returns false
-                let collateral = self.twin_star.read();
+                let can_borrow: bool = self.twin_star.read().can_borrow(borrower, account_usd);
 
                 /// # Error
                 /// * `INSUFFICIENT_LIQUIDITY` - Revert if user has insufficient collateral amount for this loan
-                assert(collateral.can_borrow(borrower, account_usd), INSUFFICIENT_LIQUIDITY);
+                assert(can_borrow, BorrowableErrors::INSUFFICIENT_LIQUIDITY);
             }
 
             /// ────────── 6. Deposit in strategy
@@ -1181,8 +1183,6 @@ mod Borrowable {
             borrow_amount
         }
 
-        /// Accrues interest before function logic
-        ///
         /// # Implementation
         /// * IBorrowable
         ///
@@ -1195,15 +1195,15 @@ mod Borrowable {
             repay_amount: u256,
             calldata: LiquidateCalldata
         ) -> u256 {
-            /// Lock and update balance
+            /// Lock and accrue interest
             self.lock_and_accrue();
 
             /// Get the sender address - We need this for the router to allow flash liquidations
             let caller = get_caller_address();
 
             /// ────────── 1. Get borrower's latest USD debt - `update` accrued interest before this call
-            /// Latest borrow balance
-            let (_, borrow_balance) = self.borrow_balance_internal(borrower);
+            /// Latest borrow balance - We have already accured so its guaranteed to be the latest balance
+            let (_, borrow_balance) = self.latest_borrow_balance(borrower, false);
 
             /// Make sure that the amount being repaid is never more than the borrower's borrow balance
             let max = if repay_amount > borrow_balance {
@@ -1233,7 +1233,7 @@ mod Borrowable {
 
             /// # Error
             /// * `INSUFFICIENT_USD_RECEIVED` - Reverts if we received less USD than declared
-            assert(amount_usd >= max, INSUFFICIENT_USD_RECEIVED);
+            assert(amount_usd >= max, BorrowableErrors::INSUFFICIENT_USD_RECEIVED);
 
             /// ────────── 5. Update borrow internally with 0 borrow amount and the amount of usd received
             /// Pass to CygnusBorrowModel
@@ -1264,16 +1264,16 @@ mod Borrowable {
         fn initialize_void(ref self: ContractState) {
             /// This is the market
             let zk_market =
-                contract_address_const::<0x04c0a5193d58f74fbace4b74dcf65481e734ed1714121bdc571da345540efa05>();
+                starknet::contract_address_const::<0x04c0a5193d58f74fbace4b74dcf65481e734ed1714121bdc571da345540efa05>();
             let market = IZKLendMarketDispatcher { contract_address: zk_market };
 
             /// Zk USDC
             let zk_usdc =
-                contract_address_const::<0x047ad51726d891f972e74e4ad858a261b43869f7126ce7436ee0b2529a98f486>();
+                starknet::contract_address_const::<0x047ad51726d891f972e74e4ad858a261b43869f7126ce7436ee0b2529a98f486>();
             let usdc = IERC20Dispatcher { contract_address: zk_usdc };
 
             /// Max approve
-            self.underlying.read().approve(zk_market.into(), BoundedInt::max());
+            self.underlying.read().approve(zk_market.into(), integer::BoundedInt::max());
 
             /// Update storage
             self.zk_lend_market.write(market);
@@ -1359,38 +1359,36 @@ mod Borrowable {
         ///
         /// # Returns
         /// * The amount of shares minted to the DAO Reserves
-        fn mint_reserves_internal(ref self: ContractState, interest_accumulated: u256) -> u256 {
-            let reserves_usd = interest_accumulated.mul_wad(self.reserve_factor.read());
-            let new_reserves = self.convert_to_shares(reserves_usd);
+        fn mint_reserves_internal(ref self: ContractState, cash: u256, interest: u256) -> u256 {
+            /// Get the reserves (interest accrued * reserve factor)
+            let reserves_usd = interest.mul_wad(self.reserve_factor.read());
+
+            /// Since we mint CygUSD shares for reserves we use the same calculation as
+            /// `convert_to_shares` but use the cash from the borrow_indices to avoid
+            /// having to use preview_balance() again to save gas.
+            let total_borrows = self.total_borrows.read();
+            let total_supply = self.total_supply.read();
+            let new_reserves = reserves_usd.full_mul_div(total_supply, (cash + total_borrows));
+
+            /// Mint reserves to the DAO reserves contract
             if new_reserves > 0 {
                 let dao_reserves = self.hangar18.read().dao_reserves();
                 self.mint_internal(dao_reserves, new_reserves);
             }
+
             new_reserves
         }
 
+        // TODO - mut borrows maybe not mut
+        fn total_assets_internal(self: @ContractState, accrue: bool) -> u256 {
+            let mut borrows = self.total_borrows.read();
 
-        /// Accrues interest internally. First get borrow indices then update state
-        fn accrue_interest_internal(ref self: ContractState) {
-            /// Accrue interest internally
-            let (cash, borrows, index, interest_acc, timestamp) = self.borrow_indices_internal();
-
-            /// If the timestamp is last accrual then return and don't store
-            if (timestamp == self.last_accrual_timestamp.read()) {
-                return;
+            if accrue {
+                let (_, latest_borrows, _, _, _) = self.borrow_indices_internal();
+                borrows = latest_borrows;
             }
 
-            // Check for reserves and mint if necessary
-            let new_reserves = self.mint_reserves_internal(interest_acc);
-
-            /// Update to storage
-            self.total_borrows.write(borrows);
-            self.borrow_index.write(index);
-            self.last_accrual_timestamp.write(timestamp);
-
-            /// # Emit
-            /// * `AccrueInterest`
-            self.emit(AccrueInterest { cash, borrows, interest_acc, new_reserves });
+            self.preview_balance() + borrows
         }
 
         /// Gets the latest borrow indices to calculate the up to date total borrows and borrow index
@@ -1399,18 +1397,20 @@ mod Borrowable {
         /// * The current available cash (ie `total_balance`)
         /// * The latest total pool borrows (with interest accrued)
         /// * The latest borrow index
+        /// * The time elapsed since last accrual
         /// * The interest accumulated since last accrual
-        /// * The timestamp of the latest accrual
-        fn borrow_indices_internal(self: @ContractState) -> (u256, u256, u256, u256, u64) {
-            /// 1. Get timestamp and check time elapsed since last interest accrual
-            let timestamp = get_block_timestamp();
-            let last_accrual = self.last_accrual_timestamp.read();
-            let time_elapsed = timestamp - last_accrual;
-
-            /// 2. Get available cash, total borrows and current borrow index stored
+        fn borrow_indices_internal(self: @ContractState) -> (u256, u256, u256, u64, u256) {
+            /// 1. Get available cash, total borrows and current borrow index stored
             let cash = self.preview_balance();
             let mut total_borrows = self.total_borrows.read();
             let mut borrow_index = self.borrow_index.read();
+
+            /// 2. Get timestamp and check time elapsed since last interest accrual
+            let time_elapsed = get_block_timestamp() - self.last_accrual_timestamp.read();
+
+            if time_elapsed == 0 {
+                return (cash, total_borrows, borrow_index, 0, 0);
+            }
 
             /// 3. Calculate the latest borrow rate and calculate interest accumulated
             let borrow_rate = self.borrow_rate_internal(cash, total_borrows);
@@ -1421,7 +1421,31 @@ mod Borrowable {
             total_borrows += interest_accumulated;
             borrow_index += interest_factor.mul_wad(borrow_index);
 
-            (cash, total_borrows, borrow_index, interest_accumulated, timestamp)
+            (cash, total_borrows, borrow_index, time_elapsed, interest_accumulated)
+        }
+
+        /// Accrues interest internally. First get borrow indices then update state
+        fn accrue_interest_internal(ref self: ContractState) {
+            /// Accrue interest internally
+            let (cash, borrows, index, time_elapsed, interest) = self.borrow_indices_internal();
+
+            /// If the timestamp is last accrual then return and don't store
+            /// Check for borrows = 0 to avoid divide by 0 in mint_reserves
+            if (time_elapsed == 0 || borrows == 0) {
+                return;
+            }
+
+            // Check for reserves and mint if necessary before updating total_borrows
+            let new_reserves = self.mint_reserves_internal(cash, interest);
+
+            /// Update to storage - TODO use single slots?
+            self.total_borrows.write(borrows);
+            self.borrow_index.write(index);
+            self.last_accrual_timestamp.write(get_block_timestamp());
+
+            /// # Emit
+            /// * `AccrueInterest`
+            self.emit(AccrueInterest { cash, borrows, interest, new_reserves });
         }
 
         /// TODO: Add pillars of creation contract
@@ -1457,8 +1481,9 @@ mod Borrowable {
             borrow_amount: u256,
             repay_amount: u256
         ) -> u256 {
-            // Load snapshot
-            let (_, borrow_balance) = self.borrow_balance_internal(borrower);
+            // Load snapshot - We have already accrued since this function is only called
+            // after `borrow()` or `liquidate()` which accrue beforehand
+            let (_, borrow_balance) = self.latest_borrow_balance(borrower, false);
 
             // In case of flash loan or 0 return current borrow_balance
             if (borrow_amount == repay_amount) {
@@ -1535,8 +1560,6 @@ mod Borrowable {
         /// # Returns
         /// * The current exchange rate between CygUSD and USD
         fn exchange_rate_internal(self: @ContractState) -> u256 {
-            let (cash, borrows, _, _, _) = self.borrow_indices_internal();
-
             // Gas savings
             let supply = self.total_supply.read();
 
@@ -1546,42 +1569,20 @@ mod Borrowable {
             }
 
             // Assets / Supply
-            (cash + borrows).div_wad(supply)
-        }
-
-        /// Gets the borrow balance of a user from the snapshot, with interest accrued
-        fn latest_borrow_balance(self: @ContractState, borrower: ContractAddress) -> (u256, u256) {
-            // Load borrower snapshot
-            let snapshot: BorrowSnapshot = self.borrow_balances.read(borrower);
-
-            // If user interest index is 0 then borrows is 0
-            if snapshot.interest_index == 0 {
-                return (0, 0);
-            }
-
-            // Read snapshot
-            let principal = snapshot.principal;
-            let interest_index = snapshot.interest_index;
-
-            let (_, _, borrow_index, _, _) = self.borrow_indices_internal();
-
-            // The borrow balance (ie what the borrower owes with interest) is:
-            // (borrower.principal * borrow_index) / borrower.interest_index
-            let borrow_balance = principal.full_mul_div(borrow_index, interest_index);
-
-            (principal, borrow_balance)
+            self.total_assets().div_wad(supply)
         }
 
         /// Gets the borrow balance of a user from the snapshot
         ///
         /// # Arguments
         /// * `borrower` - The address of the borrower
+        /// * `accrue` - Whether we should simulate accrual or not (gas savings)
         ///
         /// # Returns
         /// * The borrower's principal (actual borrowed amount)
         /// * The borrowed amount with interest
-        fn borrow_balance_internal(
-            self: @ContractState, borrower: ContractAddress
+        fn latest_borrow_balance(
+            self: @ContractState, borrower: ContractAddress, accrue: bool
         ) -> (u256, u256) {
             // Load borrower snapshot
             let snapshot: BorrowSnapshot = self.borrow_balances.read(borrower);
@@ -1591,18 +1592,24 @@ mod Borrowable {
                 return (0, 0);
             }
 
-            // Read snapshot
-            let principal = snapshot.principal;
-            let interest_index = snapshot.interest_index;
+            /// Get latest index
+            let mut index = self.borrow_index.read();
+
+            /// If accrue then get indices
+            if accrue {
+                /// Simulate accrual and get latest borrow index
+                let (_, _, new_index, _, _) = self.borrow_indices_internal();
+
+                index = new_index;
+            }
 
             // The borrow balance (ie what the borrower owes with interest) is:
             // (borrower.principal * borrow_index) / borrower.interest_index
-            let borrow_balance = principal.full_mul_div(self.borrow_index.read(), interest_index);
+            let borrow_balance = snapshot.principal.full_mul_div(index, snapshot.interest_index);
 
-            (principal, borrow_balance)
+            (snapshot.principal, borrow_balance)
         }
 
-        // TODO: This might need to re-do:
         // 1. Remove borrow_rate storage, and make it a function or something
         // 2. make get_borrow_balance return up to date thing
         /// Caclulate borrow rate internally
@@ -1652,11 +1659,13 @@ mod Borrowable {
                 return shares;
             }
 
+            // We have already accrued interest since we use `lock_and_update`
+            // in redeem, so pass false to avoid loading indicies again and save gas
             // assets = shares * balance / total supply
-            shares.full_mul_div(self.total_assets(), supply)
+            shares.full_mul_div(self.total_assets_internal(false), supply)
         }
 
-        /// Convert USD assets to CygUSD shares
+        /// Convert USD assets to CygUSD shares - We have already accrued interest
         ///
         /// # Arguments
         /// * `assets` - The amount of USD assets to convert to CygUSD shares
@@ -1672,8 +1681,10 @@ mod Borrowable {
                 return assets;
             }
 
+            // We have already accrued interest since we use `lock_and_update`
+            // in deposit, so pass false to avoid loading indicies again and save gas
             // shares = assets * supply / balance
-            assets.full_mul_div(supply, self.total_assets())
+            assets.full_mul_div(supply, self.total_assets_internal(false))
         }
 
 
@@ -1693,9 +1704,9 @@ mod Borrowable {
         ) {
             /// # Error
             /// * `INVALID_RANGE` - Avoid if not within range
-            assert(base_rate < BASE_RATE_MAX, INVALID_RANGE);
-            assert(kink >= KINK_UTIL_MIN && kink <= KINK_UTIL_MAX, INVALID_RANGE);
-            assert(kink_muliplier <= KINK_MULTIPLIER_MAX, INVALID_RANGE);
+            assert(base_rate < BASE_RATE_MAX, BorrowableErrors::INVALID_RANGE);
+            assert(kink >= KINK_UTIL_MIN && kink <= KINK_UTIL_MAX, BorrowableErrors::INVALID_RANGE);
+            assert(kink_muliplier <= KINK_MULTIPLIER_MAX, BorrowableErrors::INVALID_RANGE);
 
             // The annualized slope of the interest rate
             let slope = multiplier.div_wad(SECONDS_PER_YEAR * kink);
@@ -1717,6 +1728,7 @@ mod Borrowable {
         }
     }
 
+    /// TODO: Replace standard
     #[generate_trait]
     impl ERC20Impl of ERC20InternalTrait {
         /// After token transfer hook to track lender's CYG rewards.
@@ -1836,7 +1848,7 @@ mod Borrowable {
         #[inline(always)]
         fn lock(ref self: ContractState) {
             let status = self.guard.read();
-            assert(!status, REENTRANT_CALL);
+            assert(!status, BorrowableErrors::REENTRANT_CALL);
             self.guard.write(true);
         }
 
@@ -1861,7 +1873,7 @@ mod Borrowable {
 
             /// # Error
             /// * `ONLY_ADMIN` - Reverts if sender is not hangar18 admin 
-            assert(get_caller_address() == admin, ONLY_ADMIN)
+            assert(get_caller_address() == admin, BorrowableErrors::ONLY_ADMIN)
         }
     }
 }

@@ -14,52 +14,52 @@ use cygnus::terminal::collateral::{ICollateralDispatcher, ICollateralDispatcherT
 
 /// # Interface - Hangar18
 #[starknet::interface]
-trait IHangar18<TContractState> {
+trait IHangar18<T> {
     /// ───────────────────────────── CONSTANT FUNCTIONS ───────────────────────────────── ///
 
     /// # Returns
     /// * Name of the factory (`Hangar18`)
-    fn name(self: @TContractState) -> felt252;
+    fn name(self: @T) -> felt252;
 
     /// # Returns
     /// * The address of the current admin, the pool/orbiter deployer
-    fn admin(self: @TContractState) -> ContractAddress;
+    fn admin(self: @T) -> ContractAddress;
 
     /// # Returns
     /// * The address of the current pending admin
-    fn pending_admin(self: @TContractState) -> ContractAddress;
+    fn pending_admin(self: @T) -> ContractAddress;
 
     /// # Returns
     /// * The address of the oracle registry
-    fn oracle_registry(self: @TContractState) -> ContractAddress;
+    fn oracle_registry(self: @T) -> ContractAddress;
 
     /// # Returns
     /// * The address of the borrow token for all Cygnus pools
-    fn usd(self: @TContractState) -> ContractAddress;
+    fn usd(self: @T) -> ContractAddress;
 
     /// # Returns
     /// * The address of the DAO reserves
-    fn dao_reserves(self: @TContractState) -> ContractAddress;
+    fn dao_reserves(self: @T) -> ContractAddress;
 
     /// # Returns
     /// * The address of the native token on starknet (ie ETH)
-    fn native_token(self: @TContractState) -> ContractAddress;
+    fn native_token(self: @T) -> ContractAddress;
 
     /// # Returns
     /// * The orbiter struct given an orbiter ID
-    fn all_orbiters(self: @TContractState, id: u32) -> Orbiter;
+    fn all_orbiters(self: @T, id: u32) -> Orbiter;
 
     /// # Returns
     /// * The shuttle struct given a shuttle ID
-    fn all_shuttles(self: @TContractState, id: u32) -> Shuttle;
+    fn all_shuttles(self: @T, id: u32) -> Shuttle;
 
     /// # Returns
     /// * The total number of orbiters deployed
-    fn all_orbiters_length(self: @TContractState) -> u32;
+    fn all_orbiters_length(self: @T) -> u32;
 
     /// # Returns
     /// * The total number of shuttles deployed
-    fn all_shuttles_length(self: @TContractState) -> u32;
+    fn all_shuttles_length(self: @T) -> u32;
 
     /// ───────────────────────────── NON-CONSTANT FUNCTIONS ───────────────────────────── ///
 
@@ -73,10 +73,7 @@ trait IHangar18<TContractState> {
     /// * `albireo` - The address of the borrowable deployer
     /// * `deneb` - The address of the collateral deployer
     fn set_orbiter(
-        ref self: TContractState,
-        name: felt252,
-        albireo: IAlbireoDispatcher,
-        deneb: IDenebDispatcher
+        ref self: T, name: felt252, albireo: IAlbireoDispatcher, deneb: IDenebDispatcher
     );
 
     /// Deploys a new lending pool
@@ -91,7 +88,7 @@ trait IHangar18<TContractState> {
     /// # Returns
     /// * Borrowable and collateral contracts deployed
     fn deploy_shuttle(
-        ref self: TContractState, orbiter_id: u32, lp_token_pair: ContractAddress
+        ref self: T, orbiter_id: u32, lp_token_pair: ContractAddress
     ) -> (IBorrowableDispatcher, ICollateralDispatcher);
 
     /// Sets a new pending admin for the factory. This admin controls the most important
@@ -102,13 +99,13 @@ trait IHangar18<TContractState> {
     ///
     /// # Arguments
     /// * `new_pending_admin` - The address of the new pending admin
-    fn set_pending_admin(ref self: TContractState, new_pending_admin: ContractAddress);
+    fn set_pending_admin(ref self: T, new_pending_admin: ContractAddress);
 
     /// Pending admin accepts the admin role
     ///
     /// # Security
     /// * Only-pending-admin
-    fn accept_admin(ref self: TContractState);
+    fn accept_admin(ref self: T);
 
     /// Admin sets a new DAO Reserves contract which all pools mint reserves to
     ///
@@ -117,7 +114,7 @@ trait IHangar18<TContractState> {
     ///
     /// # Arguments
     /// * `new_dao_reserves` - The address of the new DAO reserves
-    fn set_dao_reserves(ref self: TContractState, new_dao_reserves: ContractAddress);
+    fn set_dao_reserves(ref self: T, new_dao_reserves: ContractAddress);
 }
 
 /// # Module - Hangar18
@@ -141,10 +138,7 @@ mod Hangar18 {
     };
 
     /// # Errors
-    use cygnus::factory::errors::Hangar18Errors::{
-        ONLY_ADMIN, ONLY_PENDING_ADMIN, ORBITER_INACTIVE, SHUTTLE_ALREADY_DEPLOYED,
-        ORACLE_NOT_INITIALIZED, DAO_RESERVES_CANT_BE_ZERO
-    };
+    use cygnus::factory::errors::Hangar18Errors;
 
     /// # Data
     use cygnus::data::orbiter::{Orbiter};
@@ -395,7 +389,7 @@ mod Hangar18 {
 
             /// # Error
             /// * `ORBITER_INACTIVE` - Revert if orbiter is switched off
-            assert(orbiter.status, ORBITER_INACTIVE);
+            assert(orbiter.status, Hangar18Errors::ORBITER_INACTIVE);
 
             // 2: Assign unique shuttle id
             let shuttle_id: u32 = self.total_shuttles.read();
@@ -489,7 +483,7 @@ mod Hangar18 {
 
             /// # Error
             /// * `ONLY_PENDING_ADMIN` - Avoid if caller is not pending admin
-            assert(caller == self.pending_admin.read(), ONLY_PENDING_ADMIN);
+            assert(caller == self.pending_admin.read(), Hangar18Errors::ONLY_PENDING_ADMIN);
 
             // Admin up until now
             let old_admin = self.admin.read();
@@ -515,7 +509,7 @@ mod Hangar18 {
 
             /// # Error
             /// * `DAO_RESERVES_CANT_BE_ZERO` - Avoid setting the reserves as the zero address
-            assert(!new_dao_reserves.is_zero(), DAO_RESERVES_CANT_BE_ZERO);
+            assert(!new_dao_reserves.is_zero(), Hangar18Errors::DAO_RESERVES_CANT_BE_ZERO);
 
             /// DAO reserves until now
             let old_dao_reserves = self.dao_reserves.read();
@@ -546,7 +540,7 @@ mod Hangar18 {
 
             /// # Error
             /// * `ONLY_ADMIN` - Reverts if sender is not hangar18 admin 
-            assert(get_caller_address() == admin, ONLY_ADMIN)
+            assert(get_caller_address() == admin, Hangar18Errors::ONLY_ADMIN)
         }
     }
 }
