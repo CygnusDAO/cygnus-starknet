@@ -34,6 +34,9 @@ trait IBorrowable<T> {
     /// * The allowance that `owner` has granted `spender`
     fn allowance(self: @T, owner: ContractAddress, spender: ContractAddress) -> u256;
 
+    /// Allows msg.sender to set allowance for `spender`
+    fn approve(ref self: T, spender: ContractAddress, amount: u256) -> bool;
+
     /// Transfers CygUSD from msg.sender to `recipient`
     fn transfer(ref self: T, recipient: ContractAddress, amount: u256) -> bool;
 
@@ -41,9 +44,6 @@ trait IBorrowable<T> {
     fn transfer_from(
         ref self: T, sender: ContractAddress, recipient: ContractAddress, amount: u256
     ) -> bool;
-
-    /// Allows msg.sender to set allowance for `spender`
-    fn approve(ref self: T, spender: ContractAddress, amount: u256) -> bool;
 
     /// Increase allowance
     fn increase_allowance(ref self: T, spender: ContractAddress, added_value: u256) -> bool;
@@ -1000,27 +1000,13 @@ mod Borrowable {
 
         /// # Implementation
         /// * IBorrowable
-        fn utilization_rate(self: @ContractState) -> u256 {
-            /// Get the latest borrow indices
-            let (cash, borrows, _, _, _) = self.borrow_indices_internal();
-
-            /// Avoid divide by 0
-            if borrows == 0 {
-                return 0;
-            }
-
-            /// We do not take into account reserves as we mint CygUSD
-            borrows.div_wad(cash + borrows)
-        }
-
-
-        /// # Implementation
-        /// * IBorrowable
         fn borrow_rate(self: @ContractState) -> u256 {
-            /// Get the latest borrow indices
+            // Get the current borrows with interest
+            // Calculates the borrow rate with the stored borrows and simulate interest accrual
+            // up to this point.
             let (cash, borrows, _, _, _) = self.borrow_indices_internal();
 
-            /// Latest stored borrow rate
+            // Calculates the latest borrow rate with the new increased borrows
             self.borrow_rate_internal(cash, borrows)
         }
 
@@ -1048,6 +1034,22 @@ mod Borrowable {
             /// Supply rate is slope * util
             util.mul_wad(rate_to_pool)
         }
+
+        /// # Implementation
+        /// * IBorrowable
+        fn utilization_rate(self: @ContractState) -> u256 {
+            /// Get the latest borrow indices
+            let (cash, borrows, _, _, _) = self.borrow_indices_internal();
+
+            /// Avoid divide by 0
+            if borrows == 0 {
+                return 0;
+            }
+
+            /// We do not take into account reserves as we mint CygUSD
+            borrows.div_wad(cash + borrows)
+        }
+
 
         /// Quick view function to get a lender's position
         ///
@@ -1379,7 +1381,13 @@ mod Borrowable {
             new_reserves
         }
 
-        // TODO - mut borrows maybe not mut
+        /// Gets the total cash and borrows stored
+        ///
+        /// # Arguemnts
+        /// * `accrue` - Whether we should simulate accrual. If called external, it's always true
+        ///
+        /// # Returns
+        /// * The total assets we own (cash + borrows)
         fn total_assets_internal(self: @ContractState, accrue: bool) -> u256 {
             let mut borrows = self.total_borrows.read();
 
@@ -1408,7 +1416,7 @@ mod Borrowable {
             /// 2. Get timestamp and check time elapsed since last interest accrual
             let time_elapsed = get_block_timestamp() - self.last_accrual_timestamp.read();
 
-            if time_elapsed == 0 {
+            if time_elapsed == 0 || total_borrows == 0 {
                 return (cash, total_borrows, borrow_index, 0, 0);
             }
 
@@ -1610,8 +1618,9 @@ mod Borrowable {
             (snapshot.principal, borrow_balance)
         }
 
-        // 1. Remove borrow_rate storage, and make it a function or something
-        // 2. make get_borrow_balance return up to date thing
+        /// Internal function to calculate the latest borrow rate per second
+        ///
+        /// # Arguments
         /// Caclulate borrow rate internally
         fn borrow_rate_internal(self: @ContractState, cash: u256, borrows: u256) -> u256 {
             // Real model stored vars

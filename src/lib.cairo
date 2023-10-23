@@ -98,6 +98,7 @@ mod data {
         mod integer_trait;
     }
     mod altair;
+    mod x1vault;
 }
 
 /// Global utils
@@ -113,3 +114,9 @@ mod libraries {
 mod voids {
     mod bstrategy;
 }
+
+mod vault {
+    mod x1vault;
+    mod errors;
+}
+

@@ -34,6 +34,9 @@ trait ICollateral<T> {
     /// * The allowance that `owner` has granted `spender`
     fn allowance(self: @T, owner: ContractAddress, spender: ContractAddress) -> u256;
 
+    /// Allows msg.sender to set allowance for `spender`
+    fn approve(ref self: T, spender: ContractAddress, amount: u256) -> bool;
+
     /// Transfers CygLP from msg.sender to `recipient`
     fn transfer(ref self: T, recipient: ContractAddress, amount: u256) -> bool;
 
@@ -41,9 +44,6 @@ trait ICollateral<T> {
     fn transfer_from(
         ref self: T, sender: ContractAddress, recipient: ContractAddress, amount: u256
     ) -> bool;
-
-    /// Allows msg.sender to set allowance for `spender`
-    fn approve(ref self: T, spender: ContractAddress, amount: u256) -> bool;
 
     /// Increase allowance
     fn increase_allowance(ref self: T, spender: ContractAddress, added_value: u256) -> bool;
