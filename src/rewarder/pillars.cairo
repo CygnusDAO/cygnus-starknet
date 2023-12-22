@@ -36,48 +36,50 @@ use cygnus::data::pillars::{EpochInfo, UserInfo, ShuttleInfo};
 
 /// Interface - Pillars Of Creation
 #[starknet::interface]
-trait IPillarsOfCreation<TState> {
-    /// ─────────────────────────────── CONSTANT FUNCTIONS ───────────────────────────────────
+trait IPillarsOfCreation<T> {
+    ///--------------------------------------------------------------------------------------------------------
+    ///                                        CONSTANT FUNCTIONS
+    ///--------------------------------------------------------------------------------------------------------
 
     /// # Returns
     /// * The name of the contract `Pillars of Creation`
-    fn name(self: @TState) -> felt252;
+    fn name(self: @T) -> felt252;
 
     /// # Returns
     /// * The version of the rewarder deployed (to compare with other chains)
-    fn version(self: @TState) -> felt252;
+    fn version(self: @T) -> felt252;
 
     /// # Returns
     /// * The address of the hangar18 contract on Starknet
-    fn hangar18(self: @TState) -> ContractAddress;
+    fn hangar18(self: @T) -> ContractAddress;
 
     /// # Returns
     /// * The address of CYG on Starknet
-    fn cyg_token(self: @TState) -> ContractAddress;
+    fn cyg_token(self: @T) -> ContractAddress;
 
     /// # Returns
     /// * The precision used for shares
-    fn ACC_PRECISION(self: @TState) -> u256;
+    fn ACC_PRECISION(self: @T) -> u128;
 
     /// # Returns
     /// * The max possible cyg per block settable by admin, to control during initialization
-    fn MAX_CYG_PER_BLOCK(self: @TState) -> u256;
+    fn MAX_CYG_PER_BLOCK(self: @T) -> u128;
 
     /// # Returns
     /// * The duration of this contract in seconds until it dies and stops minting CYG
-    fn DURATION(self: @TState) -> u64;
+    fn DURATION(self: @T) -> u64;
 
     /// # Returns
     /// * The blocks per epoch assumed by this contract (duration / total_epochs)
-    fn BLOCKS_PER_EPOCH(self: @TState) -> u64;
+    fn BLOCKS_PER_EPOCH(self: @T) -> u64;
 
     /// # Returns
     /// * The total CYG epochs, each epoch emissions get reduced by `REDUCTION_FACTOR_PER_EPOCH`
-    fn TOTAL_EPOCHS(self: @TState) -> u256;
+    fn TOTAL_EPOCHS(self: @T) -> u128;
 
     /// # Returns
     /// * The reduction factor per epoch
-    fn REDUCTION_FACTOR_PER_EPOCH(self: @TState) -> u256;
+    fn REDUCTION_FACTOR_PER_EPOCH(self: @T) -> u128;
 
     /// Mapping to get the info for the epoch which shows cygperblock, CYG rewards, etc.
     ///
@@ -86,7 +88,7 @@ trait IPillarsOfCreation<TState> {
     ///
     /// # Returns
     /// * The epoch info struct
-    fn get_epoch_info(self: @TState, epoch: u256) -> EpochInfo;
+    fn get_epoch_info(self: @T, epoch: u128) -> EpochInfo;
 
     /// Mapping to get the shuttle info which shows shuttle alloc points, shares, etc.
     /// borrowable -> collateral = Shuttle struct
@@ -97,9 +99,7 @@ trait IPillarsOfCreation<TState> {
     ///
     /// # Returns
     /// * The shuttle struct for this borrowable -> collateral shuttle
-    fn get_shuttle_info(
-        self: @TState, borrowable: ContractAddress, collateral: ContractAddress
-    ) -> ShuttleInfo;
+    fn get_shuttle_info(self: @T, borrowable: ContractAddress, collateral: ContractAddress) -> ShuttleInfo;
 
 
     /// Mapping to get the stored info for each user that is receiving CYG rewards.
@@ -113,55 +113,52 @@ trait IPillarsOfCreation<TState> {
     /// # Returns
     /// * The user info struct
     fn get_user_info(
-        self: @TState,
-        borrowable: ContractAddress,
-        collateral: ContractAddress,
-        user: ContractAddress
+        self: @T, borrowable: ContractAddress, collateral: ContractAddress, user: ContractAddress
     ) -> UserInfo;
 
     /// # Returns
     /// * The total CYG rewards for the DAO to be claimed by the end of `DURATION`
-    fn total_cyg_dao(self: @TState) -> u256;
+    fn total_cyg_dao(self: @T) -> u128;
 
     /// # Returns
     /// * The total CYG rewards for borrowers/lenders to be claimed by the end of `DURATION`
-    fn total_cyg_rewards(self: @TState) -> u256;
+    fn total_cyg_rewards(self: @T) -> u128;
 
     /// # Returns
     /// * The unix timestamp when the rewarder starts minting CYG
-    fn birth(self: @TState) -> u64;
+    fn birth(self: @T) -> u64;
 
     /// # Returns
     /// * The unix timestamp when the rewarder stops minting CYG
-    fn death(self: @TState) -> u64;
+    fn death(self: @T) -> u64;
 
     /// # Returns
     /// * The current cyg per block for the DAO rewards
-    fn cyg_per_block_dao(self: @TState) -> u256;
+    fn cyg_per_block_dao(self: @T) -> u128;
 
     /// # Returns
     /// * The current cyg per block for the borrowers/lenders
-    fn cyg_per_block_rewards(self: @TState) -> u256;
+    fn cyg_per_block_rewards(self: @T) -> u128;
 
     /// # Returns
     /// * The current total alloc points, the sum of each shuttle alloc's points 
-    fn total_alloc_point(self: @TState) -> u256;
+    fn total_alloc_point(self: @T) -> u128;
 
     /// # Returns
     /// * The timestamp of the last time we advanced epoch
-    fn last_epoch_time(self: @TState) -> u64;
+    fn last_epoch_time(self: @T) -> u64;
 
     /// # Returns
     /// * The timestamp of the last DAO drip
-    fn last_drip_dao(self: @TState) -> u64;
+    fn last_drip_dao(self: @T) -> u64;
 
     /// # Returns
     /// * The total length of the shuttles initialized
-    fn all_shuttles_length(self: @TState) -> u32;
+    fn all_shuttles_length(self: @T) -> u32;
 
     /// # Returns
     /// * The current epoch
-    fn get_current_epoch(self: @TState) -> u256;
+    fn get_current_epoch(self: @T) -> u128;
 
     /// The emissions curve that uses TOTAL_EPOCHS and REDUCTION_FACTOR
     ///
@@ -170,14 +167,14 @@ trait IPillarsOfCreation<TState> {
     ///
     /// # Returns
     /// * The emissions curve for the `epoch`
-    fn emissions_curve(self: @TState, epoch: u256) -> u256;
+    fn emissions_curve(self: @T, epoch: u128) -> u128;
 
     /// Calculates the rewards at `epoch` given `total_rewards`
     ///
     /// # Arguments
     /// * `epoch` - The number of the epoch
     /// * `total_rewards` - The total CYG rewards that should be minted by the end of the 100th epoch
-    fn calculate_epoch_rewards(self: @TState, epoch: u256, total_rewards: u256) -> u256;
+    fn calculate_epoch_rewards(self: @T, epoch: u128, total_rewards: u128) -> u128;
 
     /// Returns the rewards for lenders and borrowers given a certain `shuttle_id` 
     /// Queries the factory for shuttle ID and returns 2 structs
@@ -185,7 +182,7 @@ trait IPillarsOfCreation<TState> {
     /// # Returns
     /// * The rewards struct for lenders in this shuttle
     /// * The rewards struct for borrowers in this shuttle
-    fn get_shuttle_by_id(self: @TState, shuttle_id: u32) -> (ShuttleInfo, ShuttleInfo);
+    fn get_shuttle_by_id(self: @T, shuttle_id: u32) -> (ShuttleInfo, ShuttleInfo);
 
     /// cyg_per_block_at_epoch_n = (total - accumulated) * reduction_factor / emissions_curve
     ///
@@ -197,83 +194,115 @@ trait IPillarsOfCreation<TState> {
     ///
     /// # Returns
     /// * The CYG minted per block needed at `epoch` to reach `total_rewards` by the end of TOTAL_EPOCHS
-    fn calculate_cyg_per_block(self: @TState, epoch: u256, total_rewards: u256) -> u256;
+    fn calculate_cyg_per_block(self: @T, epoch: u128, total_rewards: u128) -> u128;
 
     /// # Retunrs
     /// * The total CYG claimed by borrowers/lenders
-    fn total_cyg_claimed(self: @TState) -> u256;
+    fn total_cyg_claimed(self: @T) -> u128;
 
     /// # Returns
     /// * The pending cyg to be claimed by the DAO
-    fn pending_cyg_dao(self: @TState) -> u256;
+    fn pending_cyg_dao(self: @T) -> u128;
 
     /// # Arguments
     /// * `borrowable` - The address of a borrowable contract (CygUSD)
     /// * `collateral` - The address of a collateral contract (CygLP) - This is zero for lenders
-    /// * `cygnus_user` - The address of the borrower or lender
+    /// * `astronaut` - The address of the borrower or lender
     fn pending_cyg(
-        self: @TState,
-        borrowable: ContractAddress,
-        collateral: ContractAddress,
-        cygnus_user: ContractAddress
-    ) -> u256;
+        self: @T, borrowable: ContractAddress, collateral: ContractAddress, astronaut: ContractAddress
+    ) -> u128;
+
+    /// # Arguments
+    /// * `astronaut` - The address of the borrower or lender
+    fn pending_cyg_all(self: @T, astronaut: ContractAddress) -> u128;
+
 
     /// ------------- Used for quick reporting purposes, not used by the pillars itself -------------
 
     /// # Returns
     /// * `get_block_timestamp`
-    fn current_timestamp(self: @TState) -> u64;
+    fn current_timestamp(self: @T) -> u64;
 
     /// # Returns
     /// * The current epoch rewards pacing in percentage. Ie. If are 50% inside the current epoch and 
     ///   users have claimed 50% of the rewards for this epoch, we are at 100% pacing (1e18)
-    fn epoch_rewards_pacing(self: @TState) -> u256;
+    fn epoch_rewards_pacing(self: @T) -> u128;
 
     /// # Returns
     /// * The total CYG rewards in this epoch for borrowers/lenders
-    fn current_epoch_rewards(self: @TState) -> u256;
+    fn current_epoch_rewards(self: @T) -> u128;
 
     /// # Returns
     /// * The total CYG rewards in this epoch for the DAO
-    fn current_epoch_rewards_dao(self: @TState) -> u256;
+    fn current_epoch_rewards_dao(self: @T) -> u128;
 
     /// # Returns
     /// * The total CYG rewards in the last epoch for borrowers and lenders
-    fn previous_epoch_rewards(self: @TState) -> u256;
+    fn previous_epoch_rewards(self: @T) -> u128;
 
     /// # Returns
     /// * The total CYG rewards in the next epoch for borrowers and lenders
-    fn next_epoch_rewards(self: @TState) -> u256;
+    fn next_epoch_rewards(self: @T) -> u128;
 
     /// # Returns
     /// * How many blocks have passed in this epoch
-    fn blocks_this_epoch(self: @TState) -> u64;
+    fn blocks_this_epoch(self: @T) -> u64;
 
     /// # Returns
     /// * How many blocks until we reach the next epoch
-    fn until_next_epoch(self: @TState) -> u64;
+    fn until_next_epoch(self: @T) -> u64;
 
     /// # Returns
     /// * How far along we are in this epoch in %, ie blocks_this_epoch / blocks_per_epoch
-    fn epoch_progression(self: @TState) -> u256;
+    fn epoch_progression(self: @T) -> u128;
 
     /// # Returns
     /// * How many blocks left until the Pillars of Creation dies and stops minting CYG
-    fn until_supernova(self: @TState) -> u64;
+    fn until_supernova(self: @T) -> u64;
 
     /// # Returns
     /// * How far along we are until supernova in %, ie blocks_since_birth / total_duration
-    fn total_progression(self: @TState) -> u256;
+    fn total_progression(self: @T) -> u128;
 
 
     /// # Returns
     /// * Whether we are doomed or not
-    fn doom_switch(self: @TState) -> bool;
+    fn doom_switch(self: @T) -> bool;
 
-    /// ─────────────────────────────── NON-CONSTANT FUNCTIONS ───────────────────────────────
+    /// # Returns
+    /// * The (year, month, day) given unix timestamp
+    fn timestamp_to_date(self: @T, timestamp: u64) -> (u64, u64, u64);
+
+    /// # Returns
+    /// * The timestamp given (year, month, day)
+    fn date_to_timestamp(self: @T, year: u64, month: u64, day: u64) -> u64;
+
+    /// # Returns
+    /// * The number of days passed this epoch
+    fn days_passed_this_epoch(self: @T) -> u64;
+
+    /// # Returns
+    /// * The number of days until the next epoch starts
+    fn days_until_next_epoch(self: @T) -> u64;
+
+    /// # Returns
+    /// * The number of days until we die
+    fn days_until_supernova(self: @T) -> u64;
+
+    /// # Returns
+    /// * The year, month, day of birth
+    fn star_formation_date(self: @T) -> (u64, u64, u64);
+
+    /// # Returns
+    /// * The year, month, day of death
+    fn supernova_date(self: @T) -> (u64, u64, u64);
+
+    ///--------------------------------------------------------------------------------------------------------
+    ///                                      NON-CONSTANT FUNCTIONS
+    ///--------------------------------------------------------------------------------------------------------
 
     /// Try self-destruct contract
-    fn supernova(ref self: TState);
+    fn supernova(ref self: T);
 
     /// Adjusts an already initialized shuttle alloc points
     ///
@@ -284,19 +313,14 @@ trait IPillarsOfCreation<TState> {
     /// * `borrowable` - The address of a borrowable contract (CygUSD)
     /// * `collateral` - The address of a collateral contract (CygLP) - This is zero for lenders
     /// * `alloc_point` - The new shuttle alloc points
-    fn adjust_shuttle_rewards(
-        ref self: TState,
-        borrowable: ContractAddress,
-        collateral: ContractAddress,
-        alloc_point: u256
-    );
+    fn adjust_shuttle_rewards(ref self: T, borrowable: ContractAddress, collateral: ContractAddress, alloc_point: u128);
 
     /// Updates a shuttle rewards var with the latest timestamp
     ///
     /// # Arguments
     /// * `borrowable` - The address of a borrowable contract (CygUSD)
     /// * `collateral` - The address of a collateral contract (CygLP) - This is zero for lenders
-    fn update_shuttle(ref self: TState, borrowable: ContractAddress, collateral: ContractAddress);
+    fn update_shuttle(ref self: T, borrowable: ContractAddress, collateral: ContractAddress);
 
     /// Tries to advance an epoch. If successful it updates:
     /// `cyg_per_block_rewards` - CygPerBlock for borrowers/lenders
@@ -305,7 +329,7 @@ trait IPillarsOfCreation<TState> {
     /// `epoch_info` - Creates a new Epoch struct in the internal mapping, gettable via `get_epoch_info`
     ///
     /// Whether we advance or not all shuttles get updated.
-    fn accelerate_the_universe(ref self: TState);
+    fn accelerate_the_universe(ref self: T);
 
     /// Initializes lending rewards for a shuttle 
     ///
@@ -315,7 +339,7 @@ trait IPillarsOfCreation<TState> {
     /// # Arguments
     /// * `borrowable` - The address of a borrowable contract (CygUSD)
     /// * `alloc_point` - The new shuttle alloc points
-    fn set_lending_rewards(ref self: TState, borrowable: ContractAddress, alloc_point: u256);
+    fn set_lending_rewards(ref self: T, borrowable: ContractAddress, alloc_point: u128);
 
     /// Initializes borrow rewards for a shuttle 
     ///
@@ -326,12 +350,7 @@ trait IPillarsOfCreation<TState> {
     /// * `borrowable` - The address of a borrowable contract (CygUSD)
     /// * `collateral` - The address of a collateral contract (CygLP) - This is zero for lenders
     /// * `alloc_point` - The new shuttle alloc points
-    fn set_borrow_rewards(
-        ref self: TState,
-        borrowable: ContractAddress,
-        collateral: ContractAddress,
-        alloc_point: u256
-    );
+    fn set_borrow_rewards(ref self: T, borrowable: ContractAddress, collateral: ContractAddress, alloc_point: u128);
 
     /// Tracks rewards for lenders and borrowers. Caller is always borrowable
     ///
@@ -339,12 +358,10 @@ trait IPillarsOfCreation<TState> {
     /// * `account` - The address of the borrower/lender
     /// * `balance` - The borrow balance for borrowers, the deposited USD balance for lenders
     /// * `collateral` - The address of the collateral (zero address for lenders)
-    fn track_rewards(
-        ref self: TState, account: ContractAddress, balance: u256, collateral: ContractAddress
-    );
+    fn track_rewards(ref self: T, account: ContractAddress, balance: u128, collateral: ContractAddress);
 
     /// Drip CYG to the hangar18's latest `dao_reserves` contract
-    fn drip_cyg_dao(ref self: TState);
+    fn drip_cyg_dao(ref self: T);
 
     /// The caller collects their earned CYG across all shuttles and mints it to `to`
     ///
@@ -353,7 +370,7 @@ trait IPillarsOfCreation<TState> {
     ///
     /// # Returns
     /// * The collected CYG amount
-    fn collect_cyg_all(ref self: TState, to: ContractAddress) -> u256;
+    fn collect_cyg_all(ref self: T, to: ContractAddress) -> u128;
 
     /// The caller collects their earned CYG in this (borrowable, collateral) shuttle and 
     /// mints it to `to`.
@@ -365,53 +382,47 @@ trait IPillarsOfCreation<TState> {
     ///
     /// # Returns
     /// * The collected CYG amount
-    fn collect_cyg(
-        ref self: TState,
-        borrowable: ContractAddress,
-        collateral: ContractAddress,
-        to: ContractAddress
-    ) -> u256;
-
+    fn collect_cyg(ref self: T, borrowable: ContractAddress, collateral: ContractAddress, to: ContractAddress) -> u128;
 
     /// Initializes the pillars of creation contract and starts minting CYG. It stores the new epoch
     /// and stores the birth and death of the contract
     ///
     /// # Security
     /// * Only-factory-admin
-    fn initialize_pillars(ref self: TState);
+    fn initialize_pillars(ref self: T);
 
     /// Turns on the doom switch. Cannot be turned off
     ///
     /// # Security
     /// * Only-factory-admin
-    fn set_doom_switch(ref self: TState);
+    fn set_doom_switch(ref self: T);
 }
 
 #[starknet::contract]
 mod PillarsOfCreation {
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     1. IMPORTS
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     /// # Interfaces
     use super::IPillarsOfCreation;
     use cygnus::factory::hangar18::{IHangar18Dispatcher, IHangar18DispatcherTrait};
-    use cygnus::token::erc20::cyg::{ICygnusDAODispatcher, ICygnusDAODispatcherTrait};
+    use cygnus::token::cyg::{ICygnusDAODispatcher, ICygnusDAODispatcherTrait};
     use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait};
 
     /// # Libraries
-    use cygnus::libraries::full_math_lib::FixedPointMathLib::FixedPointMathLibTrait;
+    use cygnus::libraries::full_math_lib::FullMathLib::FixedPointMathLibTrait;
     use starknet::{get_contract_address, ContractAddress, get_caller_address, get_block_timestamp};
 
     /// # Data
     use cygnus::data::pillars::{EpochInfo, UserInfo, ShuttleInfo};
-    use cygnus::data::signed_integer::{
-        i256::{i256, i256TryIntou256, u256Intoi256}, integer_trait::{IntegerTrait}
-    };
+    use cygnus::data::signed_integer::{i128::{i128, u128Intoi128}, integer_trait::{IntegerTrait}};
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    use cygnus::libraries::date_time_lib::{timestamp_to_date, date_to_timestamp, diff_days};
+
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     2. EVENTS
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -444,17 +455,17 @@ mod PillarsOfCreation {
     /// NewEpoch
     #[derive(Drop, starknet::Event)]
     struct NewEpoch {
-        old_epoch: u256,
-        new_epoch: u256,
-        old_cyg_per_block: u256,
-        new_cyg_per_block: u256
+        old_epoch: u128,
+        new_epoch: u128,
+        old_cyg_per_block: u128,
+        new_cyg_per_block: u128
     }
 
     /// DAODrip
     #[derive(Drop, starknet::Event)]
     struct DAODrip {
         dao_reserves: ContractAddress,
-        amount: u256
+        amount: u128
     }
 
     /// AccelerateTheUniverse
@@ -469,7 +480,7 @@ mod PillarsOfCreation {
         borrowable: ContractAddress,
         collateral: ContractAddress,
         caller: ContractAddress,
-        current_epoch: u256,
+        current_epoch: u128,
         timestamp: u64
     }
 
@@ -480,7 +491,7 @@ mod PillarsOfCreation {
         collateral: ContractAddress,
         caller: ContractAddress,
         to: ContractAddress,
-        amount: u256
+        amount: u128
     }
 
     /// CollectAll
@@ -488,14 +499,14 @@ mod PillarsOfCreation {
     struct CollectAll {
         shuttles_length: u32,
         caller: ContractAddress,
-        amount: u256
+        amount: u128
     }
 
     #[derive(Drop, starknet::Event)]
     struct TrackRewards {
         borrowable: ContractAddress,
         account: ContractAddress,
-        balance: u256,
+        balance: u128,
         collateral: ContractAddress
     }
 
@@ -504,8 +515,8 @@ mod PillarsOfCreation {
         shuttle_id: u32,
         borrowable: ContractAddress,
         collateral: ContractAddress,
-        total_alloc_point: u256,
-        alloc_point: u256
+        total_alloc_point: u128,
+        alloc_point: u128
     }
 
     #[derive(Drop, starknet::Event)]
@@ -513,13 +524,15 @@ mod PillarsOfCreation {
         shuttle_id: u32,
         borrowable: ContractAddress,
         collateral: ContractAddress,
-        total_alloc_point: u256,
-        alloc_point: u256
+        total_alloc_point: u128,
+        alloc_point: u128
     }
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     3. STORAGE
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
+
+    use snforge_std::PrintTrait;
 
     #[storage]
     struct Storage {
@@ -528,29 +541,30 @@ mod PillarsOfCreation {
         /// Address of the CYG token
         cyg_token: ICygnusDAODispatcher,
         /// Array of all initialized shuttles (this is not the same as factory shuttles)
+        /// Helpful to loop through all shuttles
         all_shuttles_length: u32,
+        /// 'array' of shuttle structs
         all_shuttles: LegacyMap<u32, ShuttleInfo>,
         /// Mapping to get an epoch info
-        epoch_info: LegacyMap<u256, EpochInfo>,
-        /// Mapping to get a user info (borrowable -> collateral -> user address = User Info)
-        /// For lenders collateral is always the zero address
+        epoch_info: LegacyMap<u128, EpochInfo>,
+        /// Mapping of ((borrowable -> collateral) -> user address) = User Info. Lenders collateral is always 0
         user_info: LegacyMap<(ContractAddress, ContractAddress, ContractAddress), UserInfo>,
         /// Mapping to get a shuttle info (borrowable -> collateral = Shuttle)
         shuttle_info: LegacyMap<(ContractAddress, ContractAddress), ShuttleInfo>,
         /// Total CYG rewards for lenders and borrowers
-        total_cyg_rewards: u256,
+        total_cyg_rewards: u128,
         /// Total CYG rewards for the DAO
-        total_cyg_dao: u256,
+        total_cyg_dao: u128,
         /// Unix Timestamp when the rewarder starts minting rewards
         birth: u64,
         /// Unix Timestamp when the rewarder stops minting rewards
         death: u64,
         /// The current epoch's per block mint rate for lenders/borrowers
-        cyg_per_block_rewards: u256,
+        cyg_per_block_rewards: u128,
         /// The current epoch's per block mint rate for the dao
-        cyg_per_block_dao: u256,
+        cyg_per_block_dao: u128,
         /// The total alloc point for all shuttles
-        total_alloc_point: u256,
+        total_alloc_point: u128,
         /// The timestamp of the last DAO drip
         last_drip_dao: u64,
         /// The timestamp of when we advanced an epoch}
@@ -560,41 +574,37 @@ mod PillarsOfCreation {
     }
 
     /// Scale
-    const ONE: u256 = 1_000000000_000000000;
+    const ONE: u128 = 1_000000000_000000000;
 
     /// The accounting precision
-    const ACC_PRECISION: u256 = 1_000000000_000000000_000000; // 1e24
+    const ACC_PRECISION: u128 = 1_000000000_000000000; // 1e18
     /// Maximum cyg per block possible
-    const MAX_CYG_PER_BLOCK: u256 = 470000000_000000000; // 0.47e18
+    const MAX_CYG_PER_BLOCK: u128 = 470000000_000000000; // 0.47e18
     /// The percentage that rewards get reduced by each epoch
-    const REDUCTION_FACTOR_PER_EPOCH: u256 = 20000000_000000000; // 2%
+    const REDUCTION_FACTOR_PER_EPOCH: u128 = 10000000_000000000; // 1%, 0.01e18
 
-    /// Duration of the rewarder (8 years = 31_536_000 * 8)
-    const DURATION: u64 = 252_288_000;
-    /// Total epochs until the rewarder stops giving out CYG rewards
-    const TOTAL_EPOCHS: u256 = 100;
-    /// Blocks per epoch = DURATION / TOTAL_EPOCHS
-    const BLOCKS_PER_EPOCH: u64 = 2_522_880;
+    const SECONDS_PER_YEAR: u64 = 31_536_000;
+    const DURATION: u64 = 189_216_000; // SECONDS_PER_YEAR * 6 years
+    const TOTAL_EPOCHS: u128 = 156;
+    const BLOCKS_PER_EPOCH: u64 = 1_212_923; // Duration / TOTAL EPOCHS
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     4. CONSTRUCTOR
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     #[constructor]
-    fn constructor(
-        ref self: ContractState, hangar18: IHangar18Dispatcher, cyg_token: ICygnusDAODispatcher,
-    ) {
+    fn constructor(ref self: ContractState, hangar18: IHangar18Dispatcher, cyg_token: ICygnusDAODispatcher) {
         self.hangar18.write(hangar18);
         self.cyg_token.write(cyg_token);
-        self.total_cyg_rewards.write(1_750_000_000000000000000000);
+        self.total_cyg_rewards.write(4_250_000_000000000000000000);
         self.total_cyg_dao.write(500_000_000000000000000000);
     }
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     5. IMPLEMENTATION
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
-    #[external(v0)]
+    #[abi(embed_v0)]
     impl PillarsOfCreationImpl of IPillarsOfCreation<ContractState> {
         /// # Implementation
         /// * IPillarsOfCreation
@@ -628,13 +638,13 @@ mod PillarsOfCreation {
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn ACC_PRECISION(self: @ContractState) -> u256 {
+        fn ACC_PRECISION(self: @ContractState) -> u128 {
             ACC_PRECISION
         }
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn MAX_CYG_PER_BLOCK(self: @ContractState) -> u256 {
+        fn MAX_CYG_PER_BLOCK(self: @ContractState) -> u128 {
             MAX_CYG_PER_BLOCK
         }
 
@@ -646,7 +656,7 @@ mod PillarsOfCreation {
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn TOTAL_EPOCHS(self: @ContractState) -> u256 {
+        fn TOTAL_EPOCHS(self: @ContractState) -> u128 {
             TOTAL_EPOCHS
         }
 
@@ -658,13 +668,13 @@ mod PillarsOfCreation {
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn REDUCTION_FACTOR_PER_EPOCH(self: @ContractState) -> u256 {
+        fn REDUCTION_FACTOR_PER_EPOCH(self: @ContractState) -> u128 {
             REDUCTION_FACTOR_PER_EPOCH
         }
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn get_epoch_info(self: @ContractState, epoch: u256) -> EpochInfo {
+        fn get_epoch_info(self: @ContractState, epoch: u128) -> EpochInfo {
             self.epoch_info.read(epoch)
         }
 
@@ -679,23 +689,20 @@ mod PillarsOfCreation {
         /// # Implementation
         /// * IPillarsOfCreation
         fn get_user_info(
-            self: @ContractState,
-            borrowable: ContractAddress,
-            collateral: ContractAddress,
-            user: ContractAddress
+            self: @ContractState, borrowable: ContractAddress, collateral: ContractAddress, user: ContractAddress
         ) -> UserInfo {
             self.user_info.read((borrowable, collateral, user))
         }
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn total_cyg_rewards(self: @ContractState) -> u256 {
+        fn total_cyg_rewards(self: @ContractState) -> u128 {
             self.total_cyg_rewards.read()
         }
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn total_cyg_dao(self: @ContractState) -> u256 {
+        fn total_cyg_dao(self: @ContractState) -> u128 {
             self.total_cyg_dao.read()
         }
 
@@ -715,7 +722,7 @@ mod PillarsOfCreation {
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn calculate_epoch_rewards(self: @ContractState, epoch: u256, total_rewards: u256) -> u256 {
+        fn calculate_epoch_rewards(self: @ContractState, epoch: u128, total_rewards: u128) -> u128 {
             /// Calculates the rewards at `epoch` given `total_rewards`
             let cyg_per_block = self.calculate_cyg_per_block(epoch, total_rewards);
             cyg_per_block * BLOCKS_PER_EPOCH.into()
@@ -723,19 +730,19 @@ mod PillarsOfCreation {
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn cyg_per_block_rewards(self: @ContractState) -> u256 {
+        fn cyg_per_block_rewards(self: @ContractState) -> u128 {
             self.cyg_per_block_rewards.read()
         }
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn cyg_per_block_dao(self: @ContractState) -> u256 {
+        fn cyg_per_block_dao(self: @ContractState) -> u128 {
             self.cyg_per_block_dao.read()
         }
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn total_alloc_point(self: @ContractState) -> u256 {
+        fn total_alloc_point(self: @ContractState) -> u128 {
             self.total_alloc_point.read()
         }
 
@@ -759,7 +766,7 @@ mod PillarsOfCreation {
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn get_current_epoch(self: @ContractState) -> u256 {
+        fn get_current_epoch(self: @ContractState) -> u128 {
             // Get the current timestamp
             let timestamp = get_block_timestamp();
 
@@ -771,15 +778,13 @@ mod PillarsOfCreation {
             ((timestamp - self.birth.read()) / BLOCKS_PER_EPOCH).into()
         }
 
-        /// TODO: Remove this, it fails on the VM and cannot produce correct tests
-        ///
         /// # Implementation
         /// * IPillarsOfCreation
-        fn emissions_curve(self: @ContractState, epoch: u256) -> u256 {
+        fn emissions_curve(self: @ContractState, epoch: u128) -> u128 {
             /// Create the emissions curve based on the reduction factor and epoch
             let one_minus_reduction_factor = ONE - REDUCTION_FACTOR_PER_EPOCH;
             let total_epochs = TOTAL_EPOCHS - epoch;
-            let mut result: u256 = ONE;
+            let mut result: u128 = ONE;
 
             let mut len = 0;
             loop {
@@ -797,8 +802,7 @@ mod PillarsOfCreation {
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn calculate_cyg_per_block(self: @ContractState, epoch: u256, total_rewards: u256) -> u256 {
-            /// TODO: Remove this, it fails on the VM and cannot produce correct tests
+        fn calculate_cyg_per_block(self: @ContractState, epoch: u128, total_rewards: u128) -> u128 {
             let emissions = self.emissions_curve(0);
             let mut rewards = total_rewards.full_mul_div(REDUCTION_FACTOR_PER_EPOCH, emissions);
 
@@ -838,7 +842,7 @@ mod PillarsOfCreation {
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn pending_cyg_dao(self: @ContractState) -> u256 {
+        fn pending_cyg_dao(self: @ContractState) -> u128 {
             /// Calculate rewards for DAO since last dao drip
             let timestamp = get_block_timestamp();
             let last_drip_dao = self.last_drip_dao.read();
@@ -847,55 +851,80 @@ mod PillarsOfCreation {
             (timestamp.into() - last_drip_dao.into()) * cyg_per_block_dao
         }
 
-        /// View function to see user's pending CYG
+        /// View function to see user's pending CYG for a shuttle
         ///
         /// # Implementation
         /// * IPillarsOfCreation
         fn pending_cyg(
-            self: @ContractState,
-            borrowable: ContractAddress,
-            collateral: ContractAddress,
-            cygnus_user: ContractAddress
-        ) -> u256 {
+            self: @ContractState, borrowable: ContractAddress, collateral: ContractAddress, astronaut: ContractAddress
+        ) -> u128 {
             /// Get the shuttle and user info given `borrowable` and `collateral`
             let shuttle: ShuttleInfo = self.shuttle_info.read((borrowable, collateral));
-            let user: UserInfo = self.user_info.read((borrowable, collateral, cygnus_user));
+            let user: UserInfo = self.user_info.read((borrowable, collateral, astronaut));
 
             /// Get this shuttle's total shares and rewards_per_share stored
             let total_shares = shuttle.total_shares;
             let mut acc_reward_per_share = shuttle.acc_reward_per_share;
 
+            let timestamp = get_block_timestamp();
+
             /// Calculate the latest reward per share if we need
-            if (get_block_timestamp() > shuttle.last_reward_time && total_shares != 0) {
-                let time_elapsed = get_block_timestamp() - shuttle.last_reward_time;
+            if (timestamp > shuttle.last_reward_time && total_shares != 0) {
+                /// Calculate:
+                /// time_elapsed * cyg_per_block * pool_alloc
+                let time_elapsed = timestamp - shuttle.last_reward_time;
                 let cyg_per_block = self.cyg_per_block_rewards.read();
                 let total_alloc_point = self.total_alloc_point.read();
                 let shuttle_alloc = shuttle.alloc_point;
-                let shuttle_rewards_alloc = (time_elapsed.into() * cyg_per_block * shuttle_alloc);
-                let shuttle_rewards = shuttle_rewards_alloc / total_alloc_point;
 
+                let shuttle_rewards = (time_elapsed.into() * cyg_per_block * shuttle_alloc) / total_alloc_point;
+
+                /// Calculate the new reward_per_share
                 acc_reward_per_share += shuttle_rewards.full_mul_div(ACC_PRECISION, total_shares);
             }
 
-            /// Calculate user shares given the latest reward per share and reward debt and 
-            /// return pending rewards for user with this `borrowable` and `collateral`
-            let user_shares = user.shares.full_mul_div(acc_reward_per_share, ACC_PRECISION);
+            /// Calculate user shares given the latest reward per share and reward debt
+            let reward = user.shares.full_mul_div(acc_reward_per_share, ACC_PRECISION);
 
-            (user_shares.into() - user.reward_debt).try_into().unwrap()
+            /// The pending CYG reward for the user in this pool
+            (reward.into() - user.reward_debt).try_into().unwrap()
         }
 
-        /// TODO - Bonus rewards
+        /// View function to see user's total pending CYG across all shuttles
+        ///
+        /// # Implementation
+        /// * IPillarsOfCreation
+        fn pending_cyg_all(self: @ContractState, astronaut: ContractAddress) -> u128 {
+            /// Get total shuttles length to loop 
+            let shuttles_length = self.all_shuttles_length.read();
+
+            let mut amount = 0;
+            let mut shuttle_id = 0;
+
+            /// Loop through each shuttle and check for pending CYG and collect
+            /// We only pass `to` as `collect_interal` uses `get_caller_address()`
+            loop {
+                /// Escape 
+                if shuttle_id == shuttles_length {
+                    break;
+                }
+                let shuttle = self.all_shuttles.read(shuttle_id);
+                amount += self.pending_cyg(shuttle.borrowable, shuttle.collateral, astronaut);
+                shuttle_id += 1;
+            };
+
+            amount
+        }
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn total_cyg_claimed(self: @ContractState) -> u256 {
+        fn total_cyg_claimed(self: @ContractState) -> u128 {
             /// Get current epoch and loop through each stored epoch and accumulate
             /// the total cyg claimed / in each epoch
             let current_epoch = self.get_current_epoch();
-
             let mut claimed = 0;
-
             let mut i = 0;
+
             loop {
                 claimed += self.epoch_info.read(i).total_claimed;
                 if i == current_epoch {
@@ -912,7 +941,7 @@ mod PillarsOfCreation {
         ///
         /// # Implementation
         /// * IPillarsOfCreation
-        fn epoch_rewards_pacing(self: @ContractState) -> u256 {
+        fn epoch_rewards_pacing(self: @ContractState) -> u128 {
             /// Calculate how far into this epoch we are in %
             let blocks_this_epoch = self.blocks_this_epoch();
             let epoch_progress = blocks_this_epoch.into().div_wad(BLOCKS_PER_EPOCH.into());
@@ -929,21 +958,21 @@ mod PillarsOfCreation {
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn current_epoch_rewards(self: @ContractState) -> u256 {
+        fn current_epoch_rewards(self: @ContractState) -> u128 {
             let current_epoch = self.get_current_epoch();
             self.calculate_epoch_rewards(current_epoch, self.total_cyg_rewards.read())
         }
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn current_epoch_rewards_dao(self: @ContractState) -> u256 {
+        fn current_epoch_rewards_dao(self: @ContractState) -> u128 {
             let current_epoch = self.get_current_epoch();
             self.calculate_epoch_rewards(current_epoch, self.total_cyg_dao.read())
         }
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn previous_epoch_rewards(self: @ContractState) -> u256 {
+        fn previous_epoch_rewards(self: @ContractState) -> u128 {
             let current_epoch = self.get_current_epoch();
             if current_epoch == 0 {
                 0
@@ -954,7 +983,7 @@ mod PillarsOfCreation {
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn next_epoch_rewards(self: @ContractState) -> u256 {
+        fn next_epoch_rewards(self: @ContractState) -> u128 {
             let current_epoch = self.get_current_epoch();
             self.calculate_epoch_rewards(current_epoch + 1, self.total_cyg_rewards.read())
         }
@@ -967,7 +996,7 @@ mod PillarsOfCreation {
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn epoch_progression(self: @ContractState) -> u256 {
+        fn epoch_progression(self: @ContractState) -> u128 {
             let time_elapsed = get_block_timestamp() - self.last_epoch_time.read();
             time_elapsed.into().div_wad(BLOCKS_PER_EPOCH.into())
         }
@@ -986,7 +1015,7 @@ mod PillarsOfCreation {
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn total_progression(self: @ContractState) -> u256 {
+        fn total_progression(self: @ContractState) -> u128 {
             let time_elapsed = get_block_timestamp() - self.birth.read();
             time_elapsed.into().div_wad(DURATION.into())
         }
@@ -997,19 +1026,69 @@ mod PillarsOfCreation {
             self.doom_switch.read()
         }
 
-        /// ------------------------
-        /// TODO: DATE TIME LIB
-        /// ------------------------
-
-        /// ───────────────────────────── NON-CONSTANT FUNCTIONS ─────────────────────────────
+        /// ------------------------------------------------
+        /// date time functions
+        /// ------------------------------------------------
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn update_shuttle(
-            ref self: ContractState, borrowable: ContractAddress, collateral: ContractAddress
-        ) {
+        fn timestamp_to_date(self: @ContractState, timestamp: u64) -> (u64, u64, u64) {
+            timestamp_to_date(timestamp)
+        }
+
+        /// # Implementation
+        /// * IPillarsOfCreation
+        fn date_to_timestamp(self: @ContractState, year: u64, month: u64, day: u64) -> u64 {
+            date_to_timestamp(year, month, day)
+        }
+
+        /// # Implementation
+        /// * IPillarsOfCreation
+        fn days_until_next_epoch(self: @ContractState) -> u64 {
+            let epoch = self.get_current_epoch();
+            if epoch == TOTAL_EPOCHS - 1 {
+                return 0;
+            }
+            diff_days(get_block_timestamp(), self.epoch_info.read(epoch).end)
+        }
+
+        /// # Implementation
+        /// * IPillarsOfCreation
+        fn days_until_supernova(self: @ContractState) -> u64 {
+            diff_days(get_block_timestamp(), self.death.read())
+        }
+
+        /// # Implementation
+        /// * IPillarsOfCreation
+        fn days_passed_this_epoch(self: @ContractState) -> u64 {
+            let epoch = self.get_current_epoch();
+            diff_days(self.epoch_info.read(epoch).start, get_block_timestamp())
+        }
+
+        /// # Implementation
+        /// * IPillarsOfCreation
+        fn star_formation_date(self: @ContractState) -> (u64, u64, u64) {
+            timestamp_to_date(self.birth.read())
+        }
+
+        /// # Implementation
+        /// * IPillarsOfCreation
+        fn supernova_date(self: @ContractState) -> (u64, u64, u64) {
+            timestamp_to_date(self.death.read())
+        }
+
+        ///----------------------------------------------------------------------------------------------------
+        ///                                     NON-CONSTANT FUNCTIONS
+        ///----------------------------------------------------------------------------------------------------
+
+        /// # Implementation
+        /// * IPillarsOfCreation
+        fn update_shuttle(ref self: ContractState, borrowable: ContractAddress, collateral: ContractAddress) {
+            /// Try and advance epoch
+            self._advance_epoch();
+
             /// Update shuttle internally
-            self.update_shuttle_internal(borrowable, collateral);
+            self._update_shuttle(borrowable, collateral);
 
             /// # Event
             /// * `UpdateShuttle`
@@ -1021,13 +1100,12 @@ mod PillarsOfCreation {
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn collect_cyg_all(ref self: ContractState, to: ContractAddress) -> u256 {
-            /// Update all pools first
-            self.accelerate_the_universe_internal();
+        fn collect_cyg_all(ref self: ContractState, to: ContractAddress) -> u128 {
+            /// Try and advance epoch
+            self._advance_epoch();
 
             /// Get total shuttles length to loop 
             let shuttles_length = self.all_shuttles_length.read();
-
             let mut amount = 0;
             let mut shuttle_id = 0;
 
@@ -1038,8 +1116,14 @@ mod PillarsOfCreation {
                 if shuttle_id == shuttles_length {
                     break;
                 }
+
+                /// Get shuttle struct for `shuttle_id`
                 let shuttle = self.all_shuttles.read(shuttle_id);
-                amount += self.collect_cyg_internal(shuttle.borrowable, shuttle.collateral, to);
+
+                /// Updates shuttle and collects
+                amount += self._collect_cyg(shuttle.borrowable, shuttle.collateral, to);
+
+                /// Increase loop
                 shuttle_id += 1;
             };
 
@@ -1054,16 +1138,13 @@ mod PillarsOfCreation {
         /// # Implementation
         /// * IPillarsOfCreation
         fn collect_cyg(
-            ref self: ContractState,
-            borrowable: ContractAddress,
-            collateral: ContractAddress,
-            to: ContractAddress
-        ) -> u256 {
-            /// Update all pools first
-            self.accelerate_the_universe_internal();
+            ref self: ContractState, borrowable: ContractAddress, collateral: ContractAddress, to: ContractAddress
+        ) -> u128 {
+            /// Try and advance epoch
+            self._advance_epoch();
 
             /// Collect CYG internally
-            let amount = self.collect_cyg_internal(borrowable, collateral, to);
+            let amount = self._collect_cyg(borrowable, collateral, to);
 
             /// # Event
             /// * `Collect`
@@ -1076,27 +1157,26 @@ mod PillarsOfCreation {
         /// # Implementation
         /// * IPillarsOfCreation
         fn accelerate_the_universe(ref self: ContractState) {
-            self.accelerate_the_universe_internal();
+            /// Tries to advance epoch and updates all shuttles
+            self._accelerate_the_universe();
         }
 
         /// # Implementation
         /// * IPillarsOfCreation
         fn drip_cyg_dao(ref self: ContractState) {
-            self.accelerate_the_universe_internal();
-            self.drip_cyg_dao_internal();
+            /// Tries to advance epoch and updates all shuttles
+            self._accelerate_the_universe();
         }
 
         /// # Implementation
         /// * IPillarsOfCreation
         fn adjust_shuttle_rewards(
-            ref self: ContractState,
-            borrowable: ContractAddress,
-            collateral: ContractAddress,
-            alloc_point: u256
+            ref self: ContractState, borrowable: ContractAddress, collateral: ContractAddress, alloc_point: u128
         ) {
             // Check admin
-            self.check_admin();
-            self.accelerate_the_universe_internal();
+            self._check_admin();
+            /// Tries to advance epoch and updates all shuttles
+            self._accelerate_the_universe();
 
             /// Load shuttle
             let mut shuttle = self.shuttle_info.read((borrowable, collateral));
@@ -1119,14 +1199,12 @@ mod PillarsOfCreation {
         /// # Implementation
         /// * IPillarsOfCreation
         fn set_borrow_rewards(
-            ref self: ContractState,
-            borrowable: ContractAddress,
-            collateral: ContractAddress,
-            alloc_point: u256
+            ref self: ContractState, borrowable: ContractAddress, collateral: ContractAddress, alloc_point: u128
         ) {
             // Check admin
-            self.check_admin();
-            self.accelerate_the_universe_internal();
+            self._check_admin();
+            /// Tries to advance epoch and updates all shuttles
+            self._accelerate_the_universe();
 
             let mut borrow_rewards = self.shuttle_info.read((borrowable, collateral));
 
@@ -1154,22 +1232,21 @@ mod PillarsOfCreation {
 
             /// Increase shuttles length
             self.all_shuttles_length.write(shuttles_length + 1);
-
             /// Add lender rewards to internal array
             self.all_shuttles.write(shuttles_length, borrow_rewards);
-            /// Store lender rewrads in public mapping
+
+            /// Store borrow rewards in mapping
             self.shuttle_info.write((borrowable, collateral), borrow_rewards);
         }
 
 
         /// # Implementation
         /// * IPillarsOfCreation
-        fn set_lending_rewards(
-            ref self: ContractState, borrowable: ContractAddress, alloc_point: u256
-        ) {
+        fn set_lending_rewards(ref self: ContractState, borrowable: ContractAddress, alloc_point: u128) {
             // Check admin
-            self.check_admin();
-            self.accelerate_the_universe_internal();
+            self._check_admin();
+            /// Tries to advance epoch and updates all shuttles
+            self._accelerate_the_universe();
 
             let mut lender_rewards = self.shuttle_info.read((borrowable, Zeroable::zero()));
 
@@ -1197,20 +1274,17 @@ mod PillarsOfCreation {
 
             /// Increase shuttles length
             self.all_shuttles_length.write(shuttles_length + 1);
-
             /// Add lender rewards to internal array
             self.all_shuttles.write(shuttles_length, lender_rewards);
-            /// Store lender rewrads in public mapping
+
+            /// Store borrow rewards in mapping
             self.shuttle_info.write((borrowable, Zeroable::zero()), lender_rewards);
         }
 
         /// # Implementation
         /// * IPillarsOfCreation
         fn track_rewards(
-            ref self: ContractState,
-            account: ContractAddress,
-            balance: u256,
-            collateral: ContractAddress
+            ref self: ContractState, account: ContractAddress, balance: u128, collateral: ContractAddress
         ) {
             /// Don't allow dao reserves to receive any rewards
             let dao_reserves = self.hangar18.read().dao_reserves();
@@ -1222,22 +1296,19 @@ mod PillarsOfCreation {
             let borrowable = get_caller_address();
 
             /// Load shuttle and user structs
-            let mut shuttle = self.shuttle_info.read((borrowable, collateral));
+            let mut shuttle = self._update_shuttle(borrowable, collateral);
             let mut user = self.user_info.read((borrowable, collateral, account));
 
             /// For borrowers the new_shares is their principal (ie. originally borrow amount)
             /// For lenders the new_shares is their deposited USDC amount
-            let new_shares = if collateral == Zeroable::zero() {
-                balance.mul_wad(self.cyg_usd_exchange_rate(borrowable))
-            } else {
-                balance
-            };
+            let new_shares = balance;
 
             /// Calculate difference in reward debt for `account`
-            let diff_shares: i256 = new_shares.into() - user.shares.into();
-            let reward_per_share = shuttle.acc_reward_per_share.into();
-            let acc_precision = ACC_PRECISION.into();
-            let diff_reward_debt: i256 = (diff_shares * reward_per_share) / acc_precision;
+            let diff_shares: i128 = new_shares.into() - user.shares.into();
+
+            let reward_per_share: i128 = shuttle.acc_reward_per_share.into();
+
+            let diff_reward_debt: i128 = (diff_shares * reward_per_share) / ACC_PRECISION.into();
 
             /// Update user struct
             user.shares = new_shares;
@@ -1246,6 +1317,7 @@ mod PillarsOfCreation {
 
             /// Update shuttle struct
             shuttle.total_shares = (shuttle.total_shares.into() + diff_shares).try_into().unwrap();
+
             self.shuttle_info.write((borrowable, collateral), shuttle);
 
             /// TODO - Bonus rewards
@@ -1258,19 +1330,20 @@ mod PillarsOfCreation {
         /// # Implementation
         /// * IPillarsOfCreation
         fn supernova(ref self: ContractState) {
-            self.supernova_internal();
+            /// Tries to advance epoch and updates all shuttles
+            self._accelerate_the_universe();
+            /// Try to self-destruct
+            self._supernova();
         }
 
         /// # Implementation
         /// * IPillarsOfCreation
         fn initialize_pillars(ref self: ContractState) {
             // Check admin
-            self.check_admin();
+            self._check_admin();
 
             /// # Errors
             /// * `ALREADY_INITIALIZED` - Pillars can only be initialized once
-            /// TODO - this fails during tests since blocktimestamp always reutnrs 0...
-            //assert(self.birth.read().is_zero(), 'already_initialized');
             assert(self.epoch_info.read(0).total_rewards == 0, 'already_initialized');
 
             /// Calcualte the cyg per block for borrowers/lenders and the DAO at epoch `0`
@@ -1315,8 +1388,8 @@ mod PillarsOfCreation {
         /// * IPillarsOfCreation
         fn set_doom_switch(ref self: ContractState) {
             /// Check admin
-            self.check_admin();
-            self.accelerate_the_universe_internal();
+            self._check_admin();
+            self._accelerate_the_universe();
 
             /// Set the doom switch, cannot be turned off!
             if self.doom_switch.read() {
@@ -1340,31 +1413,36 @@ mod PillarsOfCreation {
     #[generate_trait]
     impl InternalImpl of InternalTrait {
         /// Modifier which is called before `collect`, `collect_all` and some admin functions
-        fn accelerate_the_universe_internal(ref self: ContractState) {
+        fn _accelerate_the_universe(ref self: ContractState) {
             /// Try advance an epoch, does not revert
-            self.advance_epoch_internal();
-            /// Update all stored shuttles internally
-            self.accelerate_internal();
-        }
+            self._advance_epoch();
 
-        /// Useful for lenders to calculate their correct USD deposited amount
-        ///
-        /// # Arguments
-        /// * `borrowable` - The address of the borrowable
-        ///
-        /// # Returns
-        /// * The exchange rate between 1 CygUSD and USD
-        fn cyg_usd_exchange_rate(ref self: ContractState, borrowable: ContractAddress) -> u256 {
-            /// Get the exchange rate between CygUSD and USD
-            let borrowable = IBorrowableDispatcher { contract_address: borrowable };
-            let exchange_rate = borrowable.exchange_rate();
+            /// Loop through each shuttle and update it internally in `shuttle_info`
+            /// Shuttles length here is different to hangar18 shuttles_length, this is 
+            /// in reality pillars length
+            let shuttles_length = self.all_shuttles_length.read();
 
-            /// Only for the first depositor
-            if exchange_rate == 0 {
-                ONE
-            } else {
-                exchange_rate
-            }
+            let mut shuttle_id = 0;
+            loop {
+                /// Escape 
+                if shuttle_id == shuttles_length {
+                    break;
+                }
+
+                /// Get shuttle for this `shuttle_id` and update shuttle
+                let shuttle = self.all_shuttles.read(shuttle_id);
+                self._update_shuttle(shuttle.borrowable, shuttle.collateral);
+
+                /// Update id
+                shuttle_id += 1;
+            };
+
+            /// Try and drip CYG to the DAO
+            self._drip_cyg_dao();
+
+            /// # Event
+            /// * `AccelerateTheUniverse`
+            self.emit(AccelerateTheUniverse { shuttles_length });
         }
 
         /// The caller collects their earned CYG and sends it to `to`.
@@ -1376,21 +1454,18 @@ mod PillarsOfCreation {
         ///
         /// # Returns
         /// * The collected CYG amount
-        fn collect_cyg_internal(
-            ref self: ContractState,
-            borrowable: ContractAddress,
-            collateral: ContractAddress,
-            to: ContractAddress
-        ) -> u256 {
+        fn _collect_cyg(
+            ref self: ContractState, borrowable: ContractAddress, collateral: ContractAddress, to: ContractAddress
+        ) -> u128 {
             let caller = get_caller_address();
 
             /// 1. Get shuttle and user. user is mutable as we update their reward debt
-            let shuttle = self.shuttle_info.read((borrowable, collateral));
+            let shuttle = self._update_shuttle(borrowable, collateral);
             let mut user = self.user_info.read((borrowable, collateral, caller));
 
             /// 2. Calculate caller's pending cyg amount
             let reward = user.shares.full_mul_div(shuttle.acc_reward_per_share, ACC_PRECISION);
-            let accumulated_reward: i256 = reward.into();
+            let accumulated_reward: i128 = reward.into();
             let cyg_amount = (accumulated_reward - user.reward_debt).try_into().unwrap();
             if cyg_amount == 0 {
                 return 0;
@@ -1408,9 +1483,6 @@ mod PillarsOfCreation {
             let mut epoch = self.epoch_info.read(current_epoch);
             epoch.total_claimed += cyg_amount;
             self.epoch_info.write(current_epoch, epoch);
-            /// # Error
-            /// * `exceeds_limit`
-            assert(epoch.total_claimed <= epoch.total_rewards, 'exceeds_limit');
 
             /// 5. Mint CYG to `to`
             self.cyg_token.read().mint(to, cyg_amount);
@@ -1420,7 +1492,7 @@ mod PillarsOfCreation {
 
         /// Drips CYG to the hangar18's DAO reserves contract
         /// Called by accelerating the pillars of creation. If successful emits an event.
-        fn drip_cyg_dao_internal(ref self: ContractState) {
+        fn _drip_cyg_dao(ref self: ContractState) {
             /// Calculate the pending cyg amount for the dao since last drip
             let timestamp = get_block_timestamp();
             let last_drip = self.last_drip_dao.read();
@@ -1440,38 +1512,6 @@ mod PillarsOfCreation {
             }
         }
 
-        /// It updates all shuttle rewards with the latest info and attempts to drip 
-        /// CYG to the DAO. Should be fairly gas efficient as `update_shuttle_internal`
-        /// doesn't update all variables in the struct just the reward vars.
-        fn accelerate_internal(ref self: ContractState) {
-            /// Loop through each shuttle and update it internally in `shuttle_info`
-            /// Shuttles length here is different to hangar18 shuttles_length, this is 
-            /// in reality pillars length
-            let shuttles_length = self.all_shuttles_length.read();
-
-            let mut shuttle_id = 0;
-            loop {
-                /// Escape 
-                if shuttle_id == shuttles_length {
-                    break;
-                }
-
-                /// Get shuttle for this `shuttle_id` and update shuttle
-                let shuttle = self.all_shuttles.read(shuttle_id);
-                self.update_shuttle_internal(shuttle.borrowable, shuttle.collateral);
-
-                /// Update id
-                shuttle_id += 1;
-            };
-
-            /// Try and drip CYG to the DAO
-            self.drip_cyg_dao_internal();
-
-            /// # Event
-            /// * `AccelerateTheUniverse`
-            self.emit(AccelerateTheUniverse { shuttles_length });
-        }
-
         /// Update the shuttle with the new reward per share and the latest update time to correctly
         /// calculate the latest rewards for users in this shuttle
         /// 
@@ -1481,7 +1521,7 @@ mod PillarsOfCreation {
         ///
         /// # Returns
         /// * The shuttle with the latest reward vars
-        fn update_shuttle_internal(
+        fn _update_shuttle(
             ref self: ContractState, borrowable: ContractAddress, collateral: ContractAddress
         ) -> ShuttleInfo {
             /// Load shuttle with `borrowable` and `collateral` (collateral here can be zero address)
@@ -1524,7 +1564,7 @@ mod PillarsOfCreation {
         /// * `cyg_per_block_dao` - The new CYG per block for the DAO
         /// * `last_epoch_time` - The current timestamp if we manage to advance epoch.
         /// * `epoch_info` - The new epoch struct which contains info on epoch start, end, rewards, etc.
-        fn advance_epoch_internal(ref self: ContractState) {
+        fn _advance_epoch(ref self: ContractState) {
             /// How many blocks have passed since start of the epoch
             let timestamp = get_block_timestamp();
             let blocks_this_epoch = timestamp - self.last_epoch_time.read();
@@ -1568,19 +1608,16 @@ mod PillarsOfCreation {
                     /// # Event
                     /// * `NewEpoch`
                     let old_epoch = new_epoch - 1;
-                    self
-                        .emit(
-                            NewEpoch { old_epoch, new_epoch, old_cyg_per_block, new_cyg_per_block }
-                        );
+                    self.emit(NewEpoch { old_epoch, new_epoch, old_cyg_per_block, new_cyg_per_block });
                 } else {
                     /// Try explode
-                    self.supernova_internal();
+                    self._supernova();
                 }
             }
         }
 
         /// Emits supernova event when we reach the end of this contracts life
-        fn supernova_internal(ref self: ContractState) {
+        fn _supernova(ref self: ContractState) {
             /// Check that we have passed total epochs
             if (self.get_current_epoch() < TOTAL_EPOCHS) {
                 return;
@@ -1591,7 +1628,7 @@ mod PillarsOfCreation {
             assert(self.doom_switch.read(), 'not_doomed_yet');
 
             // Hail Satan ʕ•ᴥ•ʔ
-            // By now this contract would have minted exactly 2,500,000. Any mints after will be reverted by the
+            // By now this contract would have minted exactly 5,000,000. Any mints after will be reverted by the
             // CYG contract. Remove self-destruct as will be deprecated
             let timestamp = get_block_timestamp();
 
@@ -1602,7 +1639,7 @@ mod PillarsOfCreation {
 
         /// # Security
         /// * Checks that caller is admin
-        fn check_admin(self: @ContractState) {
+        fn _check_admin(self: @ContractState) {
             // Get admin address from the hangar18
             let admin = self.hangar18.read().admin();
 

@@ -5,4 +5,5 @@ mod Hangar18Errors {
     const SHUTTLE_ALREADY_DEPLOYED: felt252 = 'hangar_already_deployed';
     const ORACLE_NOT_INITIALIZED: felt252 = 'hangar_oracle_not_init';
     const DAO_RESERVES_CANT_BE_ZERO: felt252 = 'hangar_invalid_dao_reserves';
+    const PENDING_CANT_BE_ZERO: felt252 = 'hangar_pending_cant_be_0';
 }

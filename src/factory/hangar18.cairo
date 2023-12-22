@@ -15,53 +15,92 @@ use cygnus::terminal::collateral::{ICollateralDispatcher, ICollateralDispatcherT
 /// # Interface - Hangar18
 #[starknet::interface]
 trait IHangar18<T> {
-    /// ───────────────────────────── CONSTANT FUNCTIONS ───────────────────────────────── ///
+    ///--------------------------------------------------------------------------------------------------------
+    ///                                        CONSTANT FUNCTIONS
+    ///--------------------------------------------------------------------------------------------------------
 
-    /// # Returns
-    /// * Name of the factory (`Hangar18`)
+    /// # Returns the name of the factory (`Hangar18`)
     fn name(self: @T) -> felt252;
 
-    /// # Returns
-    /// * The address of the current admin, the pool/orbiter deployer
+    /// # Returns the address of the current admin, the pool/orbiter deployer
     fn admin(self: @T) -> ContractAddress;
 
-    /// # Returns
-    /// * The address of the current pending admin
+    /// # Returns the address of the current pending admin
     fn pending_admin(self: @T) -> ContractAddress;
 
-    /// # Returns
-    /// * The address of the oracle registry
+    /// # Returns the address of the oracle registry
     fn oracle_registry(self: @T) -> ContractAddress;
 
-    /// # Returns
-    /// * The address of the borrow token for all Cygnus pools
+    /// # Returns the address of the borrow token for all Cygnus pools
     fn usd(self: @T) -> ContractAddress;
 
-    /// # Returns
-    /// * The address of the DAO reserves
+    /// # Returns the address of the DAO reserves
     fn dao_reserves(self: @T) -> ContractAddress;
 
-    /// # Returns
-    /// * The address of the native token on starknet (ie ETH)
+    /// # Returns the address of the native token on starknet (ie ETH)
     fn native_token(self: @T) -> ContractAddress;
 
-    /// # Returns
-    /// * The orbiter struct given an orbiter ID
+    /// # Returns the orbiter struct given an orbiter ID
     fn all_orbiters(self: @T, id: u32) -> Orbiter;
 
-    /// # Returns
-    /// * The shuttle struct given a shuttle ID
+    /// # Returns the shuttle struct given a shuttle ID
     fn all_shuttles(self: @T, id: u32) -> Shuttle;
 
+    /// # Returns the total number of orbiters deployed
+    fn total_orbiters_deployed(self: @T) -> u32;
+
+    /// # Returns the total number of shuttles deployed
+    fn total_shuttles_deployed(self: @T) -> u32;
+
+    /// Quick reporting functions on this chain to get TVLs in USD. Uses 6 decimals since our
+    /// lending token is USDC.
+
+    /// Gets a lending pool tvl (usdc deposits + lp deposits) priced in USD
+    ///
+    /// # Arguments
+    /// * `shuttle_id` - The ID of the lending pool
+    ///
     /// # Returns
-    /// * The total number of orbiters deployed
-    fn all_orbiters_length(self: @T) -> u32;
+    /// * The TVL of the shuttle
+    fn shuttle_tvl_usd(self: @T, shuttle_id: u32) -> u128;
+
+    /// Gets a collateral tvl (LP deposits) priced in USD
+    ///
+    /// # Arguments
+    /// * `shuttle_id` - The ID of the lending pool
+    ///
+    /// # Returns
+    /// * The TVL of the collateral
+    fn collateral_tvl_usd(self: @T, shuttle_id: u32) -> u128;
+
+    /// Gets a borrowable tvl (USDC deposits + borrows) priced in USD
+    ///
+    /// # Arguments
+    /// * `shuttle_id` - The ID of the lending pool
+    ///
+    /// # Returns
+    /// * The TVL of the borrowable
+    fn borrowable_tvl_usd(self: @T, shuttle_id: u32) -> u128;
 
     /// # Returns
-    /// * The total number of shuttles deployed
-    fn all_shuttles_length(self: @T) -> u32;
+    /// * Cygnus protocol current total borrows
+    fn cygnus_total_borrows_usd(self: @T) -> u128;
 
-    /// ───────────────────────────── NON-CONSTANT FUNCTIONS ───────────────────────────── ///
+    /// # Returns
+    /// * The tvl of all collaterals 
+    fn all_collaterals_tvl(self: @T) -> u128;
+
+    /// # Returns
+    /// * The tvl of all borrowbales
+    fn all_borrowables_tvl(self: @T) -> u128;
+
+    /// # Returns
+    /// * The tvl of the whole protocol on Starknet
+    fn cygnus_tvl_usd(self: @T) -> u128;
+
+    ///--------------------------------------------------------------------------------------------------------
+    ///                                      NON-CONSTANT FUNCTIONS
+    ///--------------------------------------------------------------------------------------------------------
 
     /// Sets a new orbiter in the factory
     ///
@@ -72,9 +111,7 @@ trait IHangar18<T> {
     /// * `name` - Human friendly name for the orbiter (ie. `JediSwap Orbiter`)
     /// * `albireo` - The address of the borrowable deployer
     /// * `deneb` - The address of the collateral deployer
-    fn set_orbiter(
-        ref self: T, name: felt252, albireo: IAlbireoDispatcher, deneb: IDenebDispatcher
-    );
+    fn set_orbiter(ref self: T, name: felt252, albireo_orbiter: IAlbireoDispatcher, deneb_orbiter: IDenebDispatcher);
 
     /// Deploys a new lending pool
     ///
@@ -120,9 +157,9 @@ trait IHangar18<T> {
 /// # Module - Hangar18
 #[starknet::contract]
 mod Hangar18 {
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     1. IMPORTS
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     /// # Interfaces
     use super::IHangar18;
@@ -133,20 +170,19 @@ mod Hangar18 {
     use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait};
 
     /// # Libraries
-    use starknet::{
-        ContractAddress, get_caller_address, contract_address_const, get_contract_address
-    };
+    use starknet::{ContractAddress, get_caller_address, contract_address_const, get_contract_address};
+    use cygnus::libraries::full_math_lib::FullMathLib::FixedPointMathLibTrait;
 
     /// # Errors
-    use cygnus::factory::errors::Hangar18Errors;
+    use cygnus::factory::errors::Hangar18Errors as Errors;
 
     /// # Data
     use cygnus::data::orbiter::{Orbiter};
     use cygnus::data::shuttle::{Shuttle};
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     2. EVENTS
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     /// # Events
     /// * `NewAdmin` - Logs when the pending admin accepts the admin role
@@ -184,8 +220,8 @@ mod Hangar18 {
     #[derive(Drop, starknet::Event)]
     struct NewOrbiter {
         orbiter_id: u32,
-        albireo: IAlbireoDispatcher,
-        deneb: IDenebDispatcher
+        albireo_orbiter: IAlbireoDispatcher,
+        deneb_orbiter: IDenebDispatcher
     }
 
     /// # Event
@@ -198,16 +234,16 @@ mod Hangar18 {
     }
 
     /// # Event
-    /// * `NewShuttle`
+    /// * `NewDAOReserves`
     #[derive(Drop, starknet::Event)]
     struct NewDAOReserves {
         old_dao_reserves: ContractAddress,
         new_dao_reserves: ContractAddress,
     }
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     3. STORAGE
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     #[storage]
     struct Storage {
@@ -235,36 +271,40 @@ mod Hangar18 {
         native_token: ContractAddress
     }
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     4. CONSTRUCTOR
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     #[constructor]
-    fn constructor(
-        ref self: ContractState,
-        admin: ContractAddress,
-        oracle_registry: INebulaRegistryDispatcher,
-        usd: ContractAddress
-    ) {
+    fn constructor(ref self: ContractState, admin: ContractAddress, oracle_registry: INebulaRegistryDispatcher) {
         // Admin and registry
         self.admin.write(admin);
         self.oracle_registry.write(oracle_registry);
 
-        //// Address of native (ie ETH)
-        let native_token: ContractAddress =
-            contract_address_const::<0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7>();
+        /// Address of native (ie ETH)
+        let native_token: ContractAddress = contract_address_const::<
+            0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7
+        >();
 
-        /// TODO: Make usdc contract_address_const
+        /// Address of USDC
+        let usd: ContractAddress = contract_address_const::<
+            0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8
+        >();
+
         self.usd.write(usd);
         self.native_token.write(native_token);
     }
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     5. IMPLEMENTATION
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
-    #[external(v0)]
+    #[abi(embed_v0)]
     impl Hangar18Impl of IHangar18<ContractState> {
+        ///----------------------------------------------------------------------------------------------------
+        ///                                        CONSTANT FUNCTIONS
+        ///----------------------------------------------------------------------------------------------------
+
         /// # Implementation
         /// * IHangar18
         fn name(self: @ContractState) -> felt252 {
@@ -323,15 +363,136 @@ mod Hangar18 {
 
         /// # Implementation
         /// * IHangar18
-        fn all_orbiters_length(self: @ContractState) -> u32 {
+        fn total_orbiters_deployed(self: @ContractState) -> u32 {
             self.total_orbiters.read()
         }
 
         /// # Implementation
         /// * IHangar18
-        fn all_shuttles_length(self: @ContractState) -> u32 {
+        fn total_shuttles_deployed(self: @ContractState) -> u32 {
             self.total_shuttles.read()
         }
+
+        /// # Implementation
+        /// * IHangar18
+        fn collateral_tvl_usd(self: @ContractState, shuttle_id: u32) -> u128 {
+            /// Collateral contract of this shuttle
+            let collateral = self.all_shuttles.read(shuttle_id).collateral;
+
+            /// Tvl = Total LP assets * LP Token Price
+            let total_assets = collateral.total_assets();
+            let lp_token_price = collateral.get_lp_token_price();
+
+            total_assets.mul_wad(lp_token_price)
+        }
+
+        /// # Implementation
+        /// * IHangar18
+        fn borrowable_tvl_usd(self: @ContractState, shuttle_id: u32) -> u128 {
+            /// Borrowable contract of this shuttle
+            let borrowable = self.all_shuttles.read(shuttle_id).borrowable;
+
+            /// total_balance = Current amount deposited in the strategy not being borrowed
+            /// total_borrows = Current amount of borrowed USDC
+            /// total_assets = total_balance + total_borrows
+            ///
+            /// Tvl = Total USDC assets * USDC Price
+            let total_assets = borrowable.total_assets();
+            let usd_price = borrowable.get_usd_price();
+
+            total_assets.mul_wad(usd_price)
+        }
+
+        /// # Implementation
+        /// * IHangar18
+        fn shuttle_tvl_usd(self: @ContractState, shuttle_id: u32) -> u128 {
+            /// Borrowable TVL + Collateral TVL
+            self.borrowable_tvl_usd(shuttle_id) + self.collateral_tvl_usd(shuttle_id)
+        }
+
+        /// # Implementation
+        /// * IHangar18
+        fn all_collaterals_tvl(self: @ContractState) -> u128 {
+            /// Get total shuttles and initialize length and tvl accumulator
+            let total_shuttles = self.total_shuttles.read();
+            let mut length = 0;
+            let mut tvl = 0;
+
+            /// Loop through all collaterals and accumulate TVL
+            loop {
+                if length == total_shuttles {
+                    break;
+                }
+                tvl += self.collateral_tvl_usd(length);
+                length += 1;
+            };
+
+            tvl
+        }
+
+        /// # Implementation
+        /// * IHangar18
+        fn all_borrowables_tvl(self: @ContractState) -> u128 {
+            /// Get total shuttles and initialize length and tvl accumulator
+            let total_shuttles = self.total_shuttles.read();
+            let mut length = 0;
+            let mut tvl = 0;
+
+            /// Loop through all borrowables and accumulate TVL
+            loop {
+                if length == total_shuttles {
+                    break;
+                }
+                tvl += self.borrowable_tvl_usd(length);
+                length += 1;
+            };
+
+            tvl
+        }
+
+        /// # Implementation
+        /// * IHangar18
+        fn cygnus_total_borrows_usd(self: @ContractState) -> u128 {
+            /// Get total shuttles and initialize length and borrows accumulator
+            let total_shuttles = self.total_shuttles.read();
+            let mut borrows = 0;
+            let mut length = 0;
+
+            /// Loop through all shuttles and accumulate borrows
+            loop {
+                if length == total_shuttles {
+                    break;
+                }
+                let shuttle: Shuttle = self.all_shuttles.read(length);
+                let total_borrows = shuttle.borrowable.total_borrows();
+                borrows += total_borrows;
+                length += 1;
+            };
+
+            borrows
+        }
+
+        fn cygnus_tvl_usd(self: @ContractState) -> u128 {
+            /// Get total shuttles and initialize length and tvl accumulator
+            let total_shuttles = self.total_shuttles.read();
+            let mut length = 0;
+            let mut tvl = 0;
+
+            /// Loop through all shuttles and accumulate tvl
+            loop {
+                if length == total_shuttles {
+                    break;
+                }
+                tvl += self.shuttle_tvl_usd(length);
+                length += 1;
+            };
+
+            tvl
+        }
+
+        ///----------------------------------------------------------------------------------------------------
+        ///                                     NON-CONSTANT FUNCTIONS
+        ///----------------------------------------------------------------------------------------------------
 
         /// Initializes a new orbiter in the factory and assigns it a unique ID
         ///
@@ -340,10 +501,7 @@ mod Hangar18 {
         ///
         /// # Implementation - IHangar18
         fn set_orbiter(
-            ref self: ContractState,
-            name: felt252,
-            albireo: IAlbireoDispatcher,
-            deneb: IDenebDispatcher
+            ref self: ContractState, name: felt252, albireo_orbiter: IAlbireoDispatcher, deneb_orbiter: IDenebDispatcher
         ) {
             // Check for admin
             self.check_admin();
@@ -352,13 +510,7 @@ mod Hangar18 {
             let orbiter_id = self.total_orbiters.read();
 
             // Build orbiter and assign unique ID
-            let orbiter: Orbiter = Orbiter {
-                status: true,
-                orbiter_id: orbiter_id,
-                albireo_orbiter: albireo,
-                deneb_orbiter: deneb,
-                name: name
-            };
+            let orbiter: Orbiter = Orbiter { status: true, orbiter_id, albireo_orbiter, deneb_orbiter, name };
 
             // Store orbiter struct
             self.all_orbiters.write(orbiter_id, orbiter);
@@ -368,7 +520,7 @@ mod Hangar18 {
 
             /// # Event
             /// * `NewOrbiter`
-            self.emit(NewOrbiter { orbiter_id, albireo, deneb });
+            self.emit(NewOrbiter { orbiter_id, albireo_orbiter, deneb_orbiter });
         }
 
         /// Deploys a lending pool, given an LP Token Pair and the ID for the deployers
@@ -384,42 +536,36 @@ mod Hangar18 {
             /// Check sender is admin
             self.check_admin();
 
-            // 1: Load orbiter
+            // 1. Load orbiter
             let orbiter: Orbiter = self.all_orbiters.read(orbiter_id);
 
             /// # Error
             /// * `ORBITER_INACTIVE` - Revert if orbiter is switched off
-            assert(orbiter.status, Hangar18Errors::ORBITER_INACTIVE);
+            assert(orbiter.status, Errors::ORBITER_INACTIVE);
 
             // 2: Assign unique shuttle id
             let shuttle_id: u32 = self.total_shuttles.read();
 
             // 3. Get Oracle
             // Check the registry for the oracle for this LP
-            // let oracle: ContractAddress = self
-            //     .oracle_registry
-            //     .read()
-            //     .get_lp_token_nebula_address(lp_token_pair);
+            let oracle: ContractAddress = self.oracle_registry.read().get_lp_token_nebula_address(lp_token_pair);
 
-            // /// # Error
-            // /// * `ORACLE_NOT_INITIALIZED` - Revert if we have no oracle for this LP
-            // assert(!oracle.is_zero(), ORACLE_NOT_INITIALIZED);
+            /// # Error
+            /// * `ORACLE_NOT_INITIALIZED` - Revert if we have no oracle for this LP
+            assert(!oracle.is_zero(), Errors::ORACLE_NOT_INITIALIZED);
 
             /// 4. Deploy lending pool
             /// Use collateral orbiter to deploy lp token pool, deploy with borrowable as zero address
             let collateral: ICollateralDispatcher = orbiter
                 .deneb_orbiter
                 .deploy_collateral(
-                    lp_token_pair,
-                    IBorrowableDispatcher { contract_address: Zeroable::zero() },
-                    Zeroable::zero(),
-                    shuttle_id
+                    lp_token_pair, IBorrowableDispatcher { contract_address: Zeroable::zero() }, oracle, shuttle_id
                 );
 
             /// Use borrowable orbiter to deploy stablecoin pool with deployed collateral address
             let borrowable: IBorrowableDispatcher = orbiter
                 .albireo_orbiter
-                .deploy_borrowable(self.usd.read(), collateral, Zeroable::zero(), shuttle_id);
+                .deploy_borrowable(self.usd.read(), collateral, oracle, shuttle_id);
 
             // Set the borrowable in collateral
             collateral.set_borrowable(borrowable);
@@ -478,12 +624,16 @@ mod Hangar18 {
         /// # Implementation
         /// * IHangar18
         fn accept_admin(ref self: ContractState) {
+            /// Get pending admin
+            let pending_admin = self.pending_admin.read();
+            assert(!pending_admin.is_zero(), Errors::PENDING_CANT_BE_ZERO);
+
             // Get caller
             let caller = get_caller_address();
 
             /// # Error
             /// * `ONLY_PENDING_ADMIN` - Avoid if caller is not pending admin
-            assert(caller == self.pending_admin.read(), Hangar18Errors::ONLY_PENDING_ADMIN);
+            assert(caller == pending_admin, Errors::ONLY_PENDING_ADMIN);
 
             // Admin up until now
             let old_admin = self.admin.read();
@@ -509,7 +659,7 @@ mod Hangar18 {
 
             /// # Error
             /// * `DAO_RESERVES_CANT_BE_ZERO` - Avoid setting the reserves as the zero address
-            assert(!new_dao_reserves.is_zero(), Hangar18Errors::DAO_RESERVES_CANT_BE_ZERO);
+            assert(!new_dao_reserves.is_zero(), Errors::DAO_RESERVES_CANT_BE_ZERO);
 
             /// DAO reserves until now
             let old_dao_reserves = self.dao_reserves.read();
@@ -523,9 +673,9 @@ mod Hangar18 {
         }
     }
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     6. INTERNAL LOGIC
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     /// # Hangar18 - Internal
     #[generate_trait]
@@ -540,7 +690,7 @@ mod Hangar18 {
 
             /// # Error
             /// * `ONLY_ADMIN` - Reverts if sender is not hangar18 admin 
-            assert(get_caller_address() == admin, Hangar18Errors::ONLY_ADMIN)
+            assert(get_caller_address() == admin, Errors::ONLY_ADMIN)
         }
     }
 }

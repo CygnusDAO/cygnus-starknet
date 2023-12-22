@@ -10,6 +10,6 @@ struct InterestRateModel {
 /// Borrow Snapshot of each borrower across all pools
 #[derive(Drop, Copy, starknet::Store, Serde)]
 struct BorrowSnapshot {
-    principal: u256,
-    interest_index: u256,
+    principal: u128,
+    interest_index: u128,
 }

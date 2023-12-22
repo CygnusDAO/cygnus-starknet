@@ -15,3 +15,4 @@ trait IZKToken<TContractState> {
     /// Get our balance of zTOKEN
     fn balanceOf(self: @TContractState, account: felt252) -> u256;
 }
+

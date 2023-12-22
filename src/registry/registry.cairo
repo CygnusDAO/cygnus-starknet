@@ -24,12 +24,15 @@ trait INebulaRegistry<T> {
     /// * The total amount of LPs we are tracking
     fn all_lp_tokens_length(self: @T) -> u32;
 
+    /// IMPORTANT: Do not use this price as it does no safety checks if the aggregators fail.
+    ///            This is only kept here for reporting purposes.
+    ///
     /// # Arguments
     /// * `lp_token_pair` - The address of the LP token
     ///
     /// # Returns
     /// * The price of the lp token (gets the nebula for the LP, and calls `lp_token_price_usd`)
-    fn get_lp_token_price_usd(self: @T, lp_token_pair: ContractAddress) -> u256;
+    fn get_lp_token_price_usd(self: @T, lp_token_pair: ContractAddress) -> u128;
 
     /// # Arguments
     /// * `nebula_address` - The address of the nebula implementation
@@ -106,7 +109,8 @@ trait INebulaRegistry<T> {
         ref self: T,
         nebula_id: u32,
         lp_token_pair: ContractAddress,
-        price_feeds: Array<ContractAddress>,
+        price_feed0: felt252,
+        price_feed1: felt252,
         is_override: bool
     );
 
@@ -128,9 +132,9 @@ trait INebulaRegistry<T> {
 
 #[starknet::contract]
 mod NebulaRegistry {
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     1. IMPORTS
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     /// # Interfaces
     use super::INebulaRegistry;
@@ -145,9 +149,9 @@ mod NebulaRegistry {
     /// # Data
     use cygnus::data::registry::{Nebula};
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     2. EVENTS
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     /// # Events
     /// * `NewPendingAdmin` - Emitted when a new pending admin for the registry is set 
@@ -197,9 +201,9 @@ mod NebulaRegistry {
         lp_token_pair: ContractAddress
     }
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     3. STORAGE
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     #[storage]
     struct Storage {
@@ -215,9 +219,9 @@ mod NebulaRegistry {
         total_lp_oracles: u32,
     }
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     4. CONSTRUCTOR
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     #[constructor]
     fn constructor(ref self: ContractState, admin: ContractAddress) {
@@ -225,11 +229,11 @@ mod NebulaRegistry {
         self.admin.write(admin);
     }
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     5. IMPLEMENTATION
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
-    #[external(v0)]
+    #[abi(embed_v0)]
     impl RegistryImpl of INebulaRegistry<ContractState> {
         /// # Implementation
         /// * INebulaRegistry
@@ -280,16 +284,14 @@ mod NebulaRegistry {
 
         /// # Implementation
         /// * INebulaRegistry
-        fn get_lp_token_nebula_address(
-            self: @ContractState, lp_token_pair: ContractAddress
-        ) -> ContractAddress {
+        fn get_lp_token_nebula_address(self: @ContractState, lp_token_pair: ContractAddress) -> ContractAddress {
             // Get the nebula address for the lp token - This is more gas efficient to be used in factory
             self.lp_nebulas.read(lp_token_pair)
         }
 
         /// # Implementation
         /// * INebulaRegistry
-        fn get_lp_token_price_usd(self: @ContractState, lp_token_pair: ContractAddress) -> u256 {
+        fn get_lp_token_price_usd(self: @ContractState, lp_token_pair: ContractAddress) -> u128 {
             // Get the nebula implementation for this LP Token
             let nebula = self.lp_nebulas.read(lp_token_pair);
 
@@ -319,7 +321,8 @@ mod NebulaRegistry {
             ref self: ContractState,
             nebula_id: u32,
             lp_token_pair: ContractAddress,
-            price_feeds: Array<ContractAddress>,
+            price_feed0: felt252,
+            price_feed1: felt252,
             is_override: bool
         ) {
             // Check admin
@@ -330,7 +333,7 @@ mod NebulaRegistry {
 
             /// Will revert if we are past grace period
             ICygnusNebulaDispatcher { contract_address: nebula.nebula_address }
-                .initialize_oracle(lp_token_pair, price_feeds);
+                .initialize_oracle(lp_token_pair, price_feed0, price_feed1);
 
             // If the mapping for the lp token pair returns 0, then increase total lp oracles by 1
             // We leave this here to overwrite in case need fix
@@ -380,11 +383,7 @@ mod NebulaRegistry {
 
             // Create nebula
             let nebula: Nebula = Nebula {
-                name: name,
-                nebula_address: new_nebula,
-                nebula_id: nebula_id,
-                total_oracles: 0,
-                created_at: created_at
+                name: name, nebula_address: new_nebula, nebula_id: nebula_id, total_oracles: 0, created_at: created_at
             };
 
             // Store in `array`
@@ -448,9 +447,9 @@ mod NebulaRegistry {
         }
     }
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     6. INTERNAL LOGIC
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     #[generate_trait]
     impl InternalImpl of InternalImplTrait {

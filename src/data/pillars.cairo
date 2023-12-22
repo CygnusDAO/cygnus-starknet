@@ -1,5 +1,5 @@
 use starknet::ContractAddress;
-use cygnus::data::signed_integer::{i256::{i256, i256TryIntou256}, integer_trait::{IntegerTrait}};
+use cygnus::data::signed_integer::{i128::{i128, u128Intoi128}, integer_trait::{IntegerTrait}};
 
 /// Epoch Information on each epoch
 ///
@@ -12,9 +12,9 @@ use cygnus::data::signed_integer::{i256::{i256, i256TryIntou256}, integer_trait:
 #[derive(Copy, Drop, starknet::Store, Serde)]
 struct EpochInfo {
     epoch: u8,
-    cyg_per_block: u256,
-    total_rewards: u256,
-    total_claimed: u256,
+    cyg_per_block: u128,
+    total_rewards: u128,
+    total_claimed: u128,
     start: u64,
     end: u64
 }
@@ -36,10 +36,10 @@ struct ShuttleInfo {
     shuttle_id: u32,
     borrowable: ContractAddress,
     collateral: ContractAddress,
-    total_shares: u256,
-    acc_reward_per_share: u256,
+    total_shares: u128,
+    acc_reward_per_share: u128,
     last_reward_time: u64,
-    alloc_point: u256,
+    alloc_point: u128,
     pillars_id: u32
 }
 
@@ -49,6 +49,6 @@ struct ShuttleInfo {
 /// reward_debt - The amount of rewards debt for each user
 #[derive(Drop, starknet::Store, Serde)]
 struct UserInfo {
-    shares: u256,
-    reward_debt: i256
+    shares: u128,
+    reward_debt: i128
 }

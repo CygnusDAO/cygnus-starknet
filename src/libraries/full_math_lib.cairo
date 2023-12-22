@@ -1,24 +1,17 @@
-/// Errors
-mod MathLibErrors {
-    /// Mul div up overflwo
-    const MUL_DIV_UP_OVERFLOW: felt252 = 'mul_div_up_overflow';
-    const MUL_MOD_ZERO: felt252 = 'mul_mod_zero';
-    const MUL_DIV_ZERO: felt252 = 'mul_div_by_zero';
-    const MUL_DIV_OVERFLOW: felt252 = 'mul_div_overflow';
-}
-
 /// Quick library
-mod FixedPointMathLib {
+mod FullMathLib {
     /// ------------------------------------------------------------------------------------
     ///                                    IMPORTS
     /// ------------------------------------------------------------------------------------
 
     /// Core
-    use integer::{u256_wide_mul, u256_safe_divmod, u512_safe_div_rem_by_u256, u256_try_as_non_zero};
+    use integer::{u256_wide_mul, u256_safe_divmod, u512_safe_div_rem_by_u256, u256_try_as_non_zero, u256_sqrt};
+
+    /// Errors
+    use cygnus::libraries::errors::FullMathLibErrors;
 
     /// Constants
-    const WAD: u256 = 1_000000000_000000000;
-    use super::MathLibErrors;
+    const WAD: u128 = 1_000000000_000000000;
 
     /// Trait
     trait FixedPointMathLibTrait<T> {
@@ -41,41 +34,68 @@ mod FixedPointMathLib {
 
         /// @dev Equivalent to `(x * WAD) / y` rounded up.
         fn div_wad_up(self: @T, y: T) -> T;
+
+        fn gm(self: @T, y: T) -> T;
+
+        fn pow(self: @T, n: T) -> T;
     }
 
     /// ------------------------------------------------------------------------------------
     ///                                 IMPLEMENTATION
     /// ------------------------------------------------------------------------------------
 
-    impl FixedPointMathLibImpl of FixedPointMathLibTrait<u256> {
+    impl FixedPointMathLibImpl of FixedPointMathLibTrait<u128> {
         /// @inheritdoc FixedPointMathLibTrait
-        fn full_mul_div(self: @u256, y: u256, d: u256) -> u256 {
+        fn full_mul_div(self: @u128, y: u128, d: u128) -> u128 {
             mul_div(*self, y, d, false)
         }
 
         /// @inheritdoc FixedPointMathLibTrait
-        fn full_mul_div_up(self: @u256, y: u256, d: u256) -> u256 {
+        fn full_mul_div_up(self: @u128, y: u128, d: u128) -> u128 {
             mul_div(*self, y, d, true)
         }
 
         /// @inheritdoc FixedPointMathLibTrait
-        fn div_wad(self: @u256, y: u256) -> u256 {
+        fn div_wad(self: @u128, y: u128) -> u128 {
             mul_div(*self, WAD, y, false)
         }
 
         /// @inheritdoc FixedPointMathLibTrait
-        fn div_wad_up(self: @u256, y: u256) -> u256 {
+        fn div_wad_up(self: @u128, y: u128) -> u128 {
             mul_div(*self, WAD, y, true)
         }
 
         /// @inheritdoc FixedPointMathLibTrait
-        fn mul_wad(self: @u256, y: u256) -> u256 {
+        fn mul_wad(self: @u128, y: u128) -> u128 {
             mul_div(*self, y, WAD, false)
         }
 
         /// @inheritdoc FixedPointMathLibTrait
-        fn mul_wad_up(self: @u256, y: u256) -> u256 {
+        fn mul_wad_up(self: @u128, y: u128) -> u128 {
             mul_div(*self, y, WAD, true)
+        }
+
+        fn gm(self: @u128, y: u128) -> u128 {
+            let _x = u256 { low: *self, high: 0 };
+            let _y = u256 { low: y, high: 0 };
+            gm(_x, _y)
+        }
+
+        /// Raise a number to a power, computes x^n.
+        /// * `x` - The number to raise.
+        /// * `n` - The exponent.
+        /// # Returns
+        /// * `u256` - The result of x raised to the power of n.
+        fn pow(self: @u128, n: u128) -> u128 {
+            if n == 0 {
+                1
+            } else if n == 1 {
+                *self
+            } else if (n & 1) == 1 {
+                *self * pow(*self * *self, n / 2)
+            } else {
+                pow(*self * *self, n / 2)
+            }
         }
     }
 
@@ -83,25 +103,49 @@ mod FixedPointMathLib {
     ///                                 LOGIC
     /// ------------------------------------------------------------------------------------
 
+    fn gm(x: u256, y: u256) -> u128 {
+        u256_sqrt(x * y)
+    }
+
+    /// Raise a number to a power, computes x^n.
+    /// * `x` - The number to raise.
+    /// * `n` - The exponent.
+    /// # Returns
+    /// * `u256` - The result of x raised to the power of n.
+    fn pow(x: u128, n: u128) -> u128 {
+        if n == 0 {
+            1
+        } else if n == 1 {
+            x
+        } else if (n & 1) == 1 {
+            x * pow(x * x, n / 2)
+        } else {
+            pow(x * x, n / 2)
+        }
+    }
+
     /// From Satoru: https://github.com/keep-starknet-strange/satoru/blob/main/src/utils/precision.cairo
     ///
-    /// Apply multiplication then division to value.
+    /// Apply multiplication then division to value with a roundup.
     /// # Arguments
     /// * `value` - The value muldiv is applied to.
     /// * `numerator` - The numerator that multiplies value.
     /// * `divisor` - The denominator that divides value.
-    fn mul_div(a: u256, b: u256, denominator: u256, round_up: bool) -> u256 {
-        let product = u256_wide_mul(a, b);
-        let (q, r) = u512_safe_div_rem_by_u256(
-            product, u256_try_as_non_zero(denominator).expect(MathLibErrors::MUL_DIV_ZERO)
-        );
-        assert(q.limb2 == 0 && q.limb3 == 0, MathLibErrors::MUL_DIV_OVERFLOW);
-        let result = u256 { low: q.limb0, high: q.limb1 };
-        if round_up && r > 0 {
-            assert(result < integer::BoundedInt::max(), MathLibErrors::MUL_DIV_UP_OVERFLOW);
-            result + 1
+    fn mul_div(value: u128, numerator: u128, denominator: u128, roundup_magnitude: bool) -> u128 {
+        let value = u256 { low: value, high: 0 };
+        let numerator = u256 { low: numerator, high: 0 };
+        let denominator = u256 { low: denominator, high: 0 };
+        let product = u256_wide_mul(value, numerator);
+        let (q, r) = u512_safe_div_rem_by_u256(product, u256_try_as_non_zero(denominator).expect('MulDivByZero'));
+        if roundup_magnitude && r > 0 {
+            let result = u256 { low: q.limb0, high: q.limb1 };
+            assert(
+                result != integer::BoundedU256::max() && q.limb1 == 0 && q.limb2 == 0 && q.limb3 == 0, 'MulDivOverflow'
+            );
+            q.limb0 + 1
         } else {
-            result
+            assert(q.limb1 == 0 && q.limb2 == 0 && q.limb3 == 0, 'MulDivOverflow');
+            q.limb0
         }
     }
 }
