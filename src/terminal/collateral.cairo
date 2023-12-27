@@ -1179,6 +1179,9 @@ mod Collateral {
             /// Burn the LP. Escapes `can_redeem` as we are burning directly from contract
             self._burn(get_contract_address(), cyg_lp_received);
 
+            /// Update balance and unlock
+            self._update_and_unlock();
+
             usd_received
         }
     }
