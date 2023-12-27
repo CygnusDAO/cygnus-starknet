@@ -42,7 +42,7 @@
 //  This is a Cairo implementation of the audited Cygnus Core contracts written originally in Solidity 0.8.9:
 //  https://github.com/CygnusDAO/core
 //
-//  Both borrowable and collateral (this) contracts follow the exact same architecture:
+//  Both borrowable and collateral (this) contracts follow the exact same implementation layout:
 //
 //  Architecture of core (`borrowable.cairo` and `collateral.cairo`)
 //    ├ 1. ERC20
