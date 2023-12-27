@@ -107,29 +107,22 @@ trait ICollateral<T> {
     /// Returns the value of tokens in existence.
     fn total_supply(self: @T) -> u128;
 
-    /// Returns the remaining number of tokens that `spender` is allowed to spend on behalf of `owner` 
-    /// through `transfer_from`.
-    /// This is zero by default. This value changes when `approve` or `transfer_from` are called.
+    /// Returns the remaining number of tokens that `spender` is allowed to spend on behalf of `owner` through `transfer_from`.
     fn allowance(self: @T, owner: ContractAddress, spender: ContractAddress) -> u128;
 
     /// Sets `amount` as the allowance of `spender` over the caller’s tokens.
     fn approve(ref self: T, spender: ContractAddress, amount: u128) -> bool;
 
     /// Moves `amount` tokens from the caller's token balance to `to`.
-    /// Emits a `Transfer` event.
     fn transfer(ref self: T, recipient: ContractAddress, amount: u128) -> bool;
 
-    /// Moves `amount` tokens from `from` to `to` using the allowance mechanism.
-    /// `amount` is then deducted from the caller's allowance.
-    /// Emits a `Transfer` event.
+    /// Moves `amount` tokens from `from` to `to`.
     fn transfer_from(ref self: T, sender: ContractAddress, recipient: ContractAddress, amount: u128) -> bool;
 
-    /// Increases the allowance granted from the caller to `spender` by `added_value`.
-    /// Emits an `Approval` event indicating the updated allowance.
+    /// Increases the allowance granted from the caller to `spender` by `added_value`
     fn increase_allowance(ref self: T, spender: ContractAddress, added_value: u128) -> bool;
 
     /// Decreases the allowance granted from the caller to `spender` by `subtracted_value`.
-    /// Emits an `Approval` event indicating the updated allowance.
     fn decrease_allowance(ref self: T, spender: ContractAddress, subtracted_value: u128) -> bool;
 
     ///--------------------------------------------------------------------------------------------------------
