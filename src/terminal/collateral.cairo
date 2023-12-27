@@ -159,10 +159,15 @@ trait ICollateral<T> {
     /// * The lending pool ID
     fn shuttle_id(self: @T) -> u32;
 
-    /// # Returns the total balance of the underlying deposited in the strategy
+    /// The total amount of LP's deposited in the strategy, updated after every payable function. 
+    ///
+    /// # Returns the total amount of the underlying LP Deposited in the strategy.
     fn total_balance(self: @T) -> u128;
 
-    /// Returns the total LP assets held by the vault (ie. total_balance)
+    /// View function of the total LP assets owned by the vault. Same as `totalBalance`, kept only for 
+    /// compatability with the borrowable arm.
+    ///
+    /// # Returns the total amount of the underlying LP Deposited in the strategy
     fn total_assets(self: @T) -> u128;
 
     /// Returns the exchange rate between 1 unit of CygLP shares to assets. IE. How much LP
