@@ -105,9 +105,11 @@ trait IBorrowable<T> {
 
     /// Returns the amount of tokens owned by `account`.
     fn balance_of(self: @T, account: ContractAddress) -> u128;
+    fn balanceOf(self: @T, account: ContractAddress) -> u128;
 
     /// Returns the value of tokens in existence.
     fn total_supply(self: @T) -> u128;
+    fn totalSupply(self: @T) -> u128;
 
     /// Returns the remaining number of tokens that `spender` is allowed to spend on behalf of `owner` 
     /// through `transfer_from`.
@@ -125,14 +127,17 @@ trait IBorrowable<T> {
     /// `amount` is then deducted from the caller's allowance.
     /// Emits a `Transfer` event.
     fn transfer_from(ref self: T, sender: ContractAddress, recipient: ContractAddress, amount: u128) -> bool;
+    fn transferFrom(ref self: T, sender: ContractAddress, recipient: ContractAddress, amount: u128) -> bool;
 
     /// Increases the allowance granted from the caller to `spender` by `added_value`.
     /// Emits an `Approval` event indicating the updated allowance.
     fn increase_allowance(ref self: T, spender: ContractAddress, added_value: u128) -> bool;
+    fn increaseAllowance(ref self: T, spender: ContractAddress, added_value: u128) -> bool;
 
     /// Decreases the allowance granted from the caller to `spender` by `subtracted_value`.
     /// Emits an `Approval` event indicating the updated allowance.
     fn decrease_allowance(ref self: T, spender: ContractAddress, subtracted_value: u128) -> bool;
+    fn decreaseAllowance(ref self: T, spender: ContractAddress, subtracted_value: u128) -> bool;
 
     /// --------------------------------------------------------------------------------------------------------
     ///                                          2. TERMINAL
@@ -409,7 +414,7 @@ mod Borrowable {
     use cygnus::factory::hangar18::{IHangar18Dispatcher, IHangar18DispatcherTrait};
     use cygnus::terminal::collateral::{ICollateralDispatcher, ICollateralDispatcherTrait};
     use cygnus::rewarder::pillars::{IPillarsOfCreationDispatcher, IPillarsOfCreationDispatcherTrait};
-    use cygnus::periphery::altair_call::{IAltairCallDispatcher, IAltairCallDispatcherTrait};
+    use cygnus::periphery::altair::{IAltairDispatcher, IAltairDispatcherTrait};
 
     /// # Imports
     use starknet::{ContractAddress, get_caller_address, get_contract_address, get_block_timestamp};
@@ -554,7 +559,6 @@ mod Borrowable {
     struct Storage {
         /// Non-reentrant guard
         guard: bool,
-        /// Decimals of the borrowable token, same as underlying
         decimals: u8,
         /// Total supply of CygUSD
         total_supply: u128,
@@ -572,11 +576,6 @@ mod Borrowable {
         nebula: ICygnusNebulaDispatcher,
         /// The lending pool ID (shared by the collateral)
         shuttle_id: u32,
-        /// ---strategy----
-        /// ZK Lend Market contract - Where we deposit/withdraw
-        zk_lend_market: IZKLendMarketDispatcher,
-        /// ZK Lend USDC contract - Rebase token
-        zk_lend_usdc: IERC20Dispatcher,
         /// Total balance of the underlying deposited in the strategy (ie. total cash)
         total_balance: u128,
         /// The CYG rewarder contract
@@ -585,8 +584,6 @@ mod Borrowable {
         interest_rate_model: InterestRateModel,
         /// The current reserve Factor
         reserve_factor: u128,
-        /// Total stored borrows
-        /// ------------- Model
         /// Struct that stores users => (principal, borrows)
         borrow_balances: LegacyMap<ContractAddress, BorrowSnapshot>,
         /// timestamp of the last interest accrual
@@ -595,25 +592,24 @@ mod Borrowable {
         total_borrows: u128,
         /// Borrow index stored
         borrow_index: u128,
+        /// ZK Lend Market contract - Where we deposit/withdraw
+        zk_lend_market: IZKLendMarketDispatcher,
+        /// ZK Lend USDC contract - Rebase token
+        zk_lend_usdc: IERC20Dispatcher,
     }
 
     /// The maximum possible base rate set by admin
     const BASE_RATE_MAX: u128 = 100000000000000000; // 0.1e18 = 10%
-
-    /// The maximum possible reserve factor set by admin
-    const RESERVE_FACTOR_MAX: u128 = 200000000000000000; // 0.2e18 = 20%
-
     /// The minimum possible kink util rate
     const KINK_UTIL_MIN: u128 = 700000000000000000; // 0.7e18 = 70%
-
     /// The maximum possible kink util rate
     const KINK_UTIL_MAX: u128 = 990000000000000000; // 0.99e18 = 99%
-
+    /// To calculate annual interest rates
+    const SECONDS_PER_YEAR: u128 = 31_536_000;
+    /// The maximum possible reserve factor set by admin
+    const RESERVE_FACTOR_MAX: u128 = 200000000000000000; // 0.2e18 = 20%
     /// The max kink multiplier
     const KINK_MULTIPLIER_MAX: u128 = 40;
-
-    /// To calculate interest rates
-    const SECONDS_PER_YEAR: u128 = 31_536_000; // Doesn't take into account leap years
 
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     4. CONSTRUCTOR
@@ -668,9 +664,23 @@ mod Borrowable {
 
         /// # Implementation
         /// * IBorrowable
+        fn totalSupply(self: @ContractState) -> u128 {
+            self.total_supply.read()
+        }
+
+
+        /// # Implementation
+        /// * IBorrowable
         fn balance_of(self: @ContractState, account: ContractAddress) -> u128 {
             self.balances.read(account)
         }
+
+        /// # Implementation
+        /// * IBorrowable
+        fn balanceOf(self: @ContractState, account: ContractAddress) -> u128 {
+            self.balances.read(account)
+        }
+
 
         /// # Implementation
         /// * IBorrowable
@@ -707,13 +717,37 @@ mod Borrowable {
 
         /// # Implementation
         /// * IBorrowable
+        fn transferFrom(
+            ref self: ContractState, sender: ContractAddress, recipient: ContractAddress, amount: u128
+        ) -> bool {
+            let caller = get_caller_address();
+            self._spend_allowance(sender, caller, amount);
+            self._transfer(sender, recipient, amount);
+            true
+        }
+
+
+        /// # Implementation
+        /// * IBorrowable
         fn increase_allowance(ref self: ContractState, spender: ContractAddress, added_value: u128) -> bool {
             self._increase_allowance(spender, added_value)
         }
 
         /// # Implementation
         /// * IBorrowable
+        fn increaseAllowance(ref self: ContractState, spender: ContractAddress, added_value: u128) -> bool {
+            self._increase_allowance(spender, added_value)
+        }
+
+        /// # Implementation
+        /// * IBorrowable
         fn decrease_allowance(ref self: ContractState, spender: ContractAddress, subtracted_value: u128) -> bool {
+            self._decrease_allowance(spender, subtracted_value)
+        }
+
+        /// # Implementation
+        /// * IBorrowable
+        fn decreaseAllowance(ref self: ContractState, spender: ContractAddress, subtracted_value: u128) -> bool {
             self._decrease_allowance(spender, subtracted_value)
         }
 
@@ -780,7 +814,6 @@ mod Borrowable {
             return self.total_assets().div_wad(supply);
         }
 
-
         /// Transfers USDC from caller and mints them shares. Deposits all USDC into
         /// zkLend's USDC pool.
         ///
@@ -805,7 +838,7 @@ mod Borrowable {
             let receiver = get_contract_address();
 
             // Transfer USD to vault
-            self.underlying.read().transferFrom(caller.into(), receiver.into(), assets.into());
+            self.underlying.read().transferFrom(caller, receiver, assets.into());
 
             // Burn 1000 shares to address zero, this is only for the first depositor
             if (self.total_supply.read() == 0) {
@@ -863,7 +896,7 @@ mod Borrowable {
             self._burn(owner, shares);
 
             /// Transfer usd to recipient
-            self.underlying.read().transfer(recipient.into(), assets.into());
+            self.underlying.read().transfer(recipient, assets.into());
 
             /// # Event
             /// * Withdraw
@@ -1196,7 +1229,7 @@ mod Borrowable {
                 self._before_withdraw(borrow_amount);
 
                 /// Transfer USD to `receiver`
-                self.underlying.read().transfer(receiver.into(), borrow_amount.into());
+                self.underlying.read().transfer(receiver, borrow_amount.into());
             }
 
             /// Helper return val to simulate transaction or make static call to check the amount of LP
@@ -1211,7 +1244,7 @@ mod Borrowable {
             /// Pass data to caller if necessary
             if !calldata.recipient.is_zero() {
                 /// Get the caller address, should be any contract that subscribes to the IAltairCall interface
-                let altair = IAltairCallDispatcher { contract_address: caller };
+                let altair = IAltairDispatcher { contract_address: caller };
 
                 /// Pass calldata to router
                 liquidity = altair.altair_borrow_09E(caller, borrow_amount, calldata);
@@ -1298,7 +1331,7 @@ mod Borrowable {
             /// Pass data to caller if necessary
             if !calldata.recipient.is_zero() {
                 /// Get the caller address, should be any contract that subscribes to the IAltairCall interface
-                let altair = IAltairCallDispatcher { contract_address: caller };
+                let altair = IAltairDispatcher { contract_address: caller };
 
                 /// Pass calldata to router
                 altair.altair_liquidate_f2x(caller, cyg_lp_amount, max, calldata);
@@ -1484,13 +1517,24 @@ mod Borrowable {
             self.emit(Transfer { from: account, to: Zeroable::zero(), value: amount });
         }
 
-        // TODO - add transfer hooks
+        /// Hook to use after any transfer, mint, transfer_from, burn function.
+        /// Gets the lender's balance of CygUSD after the transaction to pass to the rewarder and update
+        /// CYG rewards for lender. The rewarder is always in sync with user's balance to adjust rewards.
+        ///
+        /// # Arguments
+        /// * `account` - The address of where the tokens are being sent from
+        /// * `to` - The address of the receiver
+        /// * `amount` - The amount being transferred
         fn _after_token_transfer(ref self: ContractState, account: ContractAddress, to: ContractAddress, amount: u128) {
+            /// Check that account is not zero (in case of mints)
             if !account.is_zero() {
+                /// Pass to pillars
                 self.track_lender(account);
             }
 
+            /// Check that receiver is not zero (in case of burns)
             if !to.is_zero() {
+                /// Pass to pillars
                 self.track_lender(to);
             }
         }
@@ -1936,7 +1980,7 @@ mod Borrowable {
         #[inline(always)]
         fn _preview_total_balance(self: @ContractState) -> u128 {
             /// zkUSDC rebases on each interest accrual, so our underlying balance is our zkUSDC balance
-            self.zk_lend_usdc.read().balanceOf(get_contract_address().into()).try_into().unwrap()
+            self.zk_lend_usdc.read().balanceOf(get_contract_address()).try_into().unwrap()
         }
 
         /// Hook that handles underlying deposits into the strategy
@@ -1948,11 +1992,8 @@ mod Borrowable {
             /// Get the zkLend market from storage
             let zk_lend_market = self.zk_lend_market.read();
 
-            /// Get the USD stablecoin
-            let usd_token = self.underlying.read().contract_address;
-
-            /// Deposit the USD into zkLend
-            zk_lend_market.deposit(usd_token.into(), amount.into());
+            /// Deposit `amount` of stablecoin into market
+            zk_lend_market.deposit(self.underlying.read().contract_address, amount.into());
         }
 
 
@@ -1965,11 +2006,8 @@ mod Borrowable {
             /// Get the zkLend market from storage
             let market = self.zk_lend_market.read();
 
-            /// Get the USD stablecoin
-            let token = self.underlying.read().contract_address;
-
-            /// Withdraw the USD from zklend
-            market.withdraw(token.into(), amount.into());
+            /// Withdraw `amount` of stablecoin from zklend market
+            market.withdraw(self.underlying.read().contract_address, amount.into());
         }
     }
 
@@ -2008,7 +2046,7 @@ mod Borrowable {
         /// The vault should never have USDC unless when repaying and depositing,
         /// and it then gets deposited in the strategy
         fn _check_balance(self: @ContractState, token: IERC20Dispatcher) -> u128 {
-            token.balanceOf(get_contract_address().into()).try_into().unwrap()
+            token.balanceOf(get_contract_address()).try_into().unwrap()
         }
     }
 }
