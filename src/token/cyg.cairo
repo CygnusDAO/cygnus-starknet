@@ -22,10 +22,12 @@ trait ICygnusDAO<T> {
     /// * Total Supply of CYG on this chain. This is different than amount minted as amount minted refers
     ///   to the total minted on Starknet, this takes into account the whole supply
     fn total_supply(self: @T) -> u128;
+    fn totalSupply(self: @T) -> u128;
 
     /// # Returns
     /// * The CYG balance for `account`
     fn balance_of(self: @T, account: ContractAddress) -> u128;
+    fn balanceOf(self: @T, account: ContractAddress) -> u128;
 
     /// # Returns
     /// * The allowance given from `owner` to `spender`
@@ -36,6 +38,7 @@ trait ICygnusDAO<T> {
 
     /// Transfer `amount` of CYG from `sender` to `recipient`
     fn transfer_from(ref self: T, sender: ContractAddress, recipient: ContractAddress, amount: u128) -> bool;
+    fn transferFrom(ref self: T, sender: ContractAddress, recipient: ContractAddress, amount: u128) -> bool;
 
     /// Gives the `spender` allowance over the sender's tokens
     fn approve(ref self: T, spender: ContractAddress, amount: u128) -> bool;
@@ -73,17 +76,6 @@ trait ICygnusDAO<T> {
     /// * `pillars` - The address of the pillars of creation contract
     fn set_pillars(ref self: T, new_pillars: ContractAddress);
 
-    /// Sets the L2 bridge to teleport CYG from mainnet to Starknet
-    /// Can only be set once!
-    ///
-    /// # Security
-    /// * Only-owner
-    /// * Only-once
-    ///
-    /// # Arguments
-    /// * `new_cyg_teleporter` - The bridge capable of teleporting CYG
-    fn set_cyg_teleporter(ref self: T, new_cyg_teleporter: ContractAddress);
-
     /// Mints CYG into existence
     ///
     /// # Security
@@ -94,8 +86,32 @@ trait ICygnusDAO<T> {
     /// * `amount` - The amount to mint
     fn mint(ref self: T, to: ContractAddress, amount: u128);
 
-    fn teleport_mint(ref self: T, to: ContractAddress, amount: u128);
-    fn teleport_burn(ref self: T, account: ContractAddress, amount: u128);
+    /// ---------------------------------------------------------------------------------------------------
+    ///                                  Ethereum Mainnet <> Starknet Bridge
+    /// ---------------------------------------------------------------------------------------------------
+
+    /// Address of CYG on mainnet
+    ///
+    /// # Returns
+    /// * The address of the CYG token on Ethereum Mainnet
+    fn cyg_token_mainnet(self: @T) -> felt252;
+
+    /// Can only be set once!
+    ///
+    /// # Security
+    /// * Only-owner
+    /// * Only-once
+    ///
+    /// # Arguments
+    /// * `new_cyg_teleporter` - The address of CYG on Ethereum Mainnet
+    fn set_cyg_token_mainnet(ref self: T, new_cyg_teleporter: felt252);
+
+    /// Teleports CYG from Starknet to Ethereum Mainnet
+    ///
+    /// # Arguments
+    /// * `recipient` - The ETH address of the recipient
+    /// * `amount` - The amount of CYG to bridge to Ethereum
+    fn teleport(ref self: T, recipient: felt252, teleport_amount: u128);
 }
 
 #[starknet::contract]
@@ -109,9 +125,7 @@ mod CygnusDAO {
 
     /// # Libraries
     use integer::BoundedInt;
-    use starknet::ContractAddress;
-    use starknet::get_caller_address;
-    use zeroable::Zeroable;
+    use starknet::{ContractAddress, send_message_to_l1_syscall, get_caller_address};
 
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     2. EVENTS
@@ -124,7 +138,7 @@ mod CygnusDAO {
         Transfer: Transfer,
         Approval: Approval,
         PillarsOfCreationSet: PillarsOfCreationSet,
-        TeleporterSet: TeleporterSet,
+        NewTeleporter: NewTeleporter,
         TeleportMint: TeleportMint,
         TeleportBurn: TeleportBurn
     }
@@ -152,25 +166,25 @@ mod CygnusDAO {
         new_pillars: ContractAddress
     }
 
-    /// TeleporterSet
+    /// NewTeleporter
     #[derive(Drop, starknet::Event)]
-    struct TeleporterSet {
-        old_cyg_teleporter: ContractAddress,
-        new_cyg_teleporter: ContractAddress
+    struct NewTeleporter {
+        old_cyg_teleporter: felt252,
+        new_cyg_teleporter: felt252
     }
 
     /// TeleportMint
     #[derive(Drop, starknet::Event)]
     struct TeleportMint {
-        to: ContractAddress,
-        amount: u128
+        recipient: ContractAddress,
+        teleport_amount: u128
     }
 
-    /// TeleportMint
+    /// TeleportBurn
     #[derive(Drop, starknet::Event)]
     struct TeleportBurn {
-        account: ContractAddress,
-        amount: u128
+        caller: ContractAddress,
+        teleport_amount: u128
     }
 
 
@@ -196,12 +210,18 @@ mod CygnusDAO {
         _pillars: ContractAddress,
         /// Initial owner, useless after setting pillars
         _owner: ContractAddress,
-        /// CYG bridge on Starknet
-        _teleporter: ContractAddress
+        /// CYG teleporter on Starknet
+        _l1_teleporter: felt252
     }
 
     /// Maximum available CYG to be minted on Starknet
     const CAP: u128 = 5_000000_000000000_000000000; // 5M
+
+    /// Max Ethereum address (uint160)
+    const MAX_ETH_ADDRESS: u256 = 0x10000000000000000000000000000000000000000;
+
+    // Payload to L1
+    const PROCESS_WITHDRAWAL: felt252 = 1;
 
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     4. CONSTRUCTOR
@@ -209,7 +229,6 @@ mod CygnusDAO {
 
     #[constructor]
     fn constructor(ref self: ContractState, name: felt252, symbol: felt252, owner: ContractAddress,) {
-        self.initializer(name, symbol);
         self._owner.write(owner);
     }
 
@@ -226,13 +245,13 @@ mod CygnusDAO {
         /// # Implementation
         /// * ICygnusDAO
         fn name(self: @ContractState) -> felt252 {
-            self._name.read()
+            'CygnusDAO'
         }
 
         /// # Implementation
         /// * ICygnusDAO
         fn symbol(self: @ContractState) -> felt252 {
-            self._symbol.read()
+            'CYG'
         }
 
         /// # Implementation
@@ -249,9 +268,22 @@ mod CygnusDAO {
 
         /// # Implementation
         /// * ICygnusDAO
+        fn totalSupply(self: @ContractState) -> u128 {
+            self._total_supply.read()
+        }
+
+        /// # Implementation
+        /// * ICygnusDAO
         fn balance_of(self: @ContractState, account: ContractAddress) -> u128 {
             self._balances.read(account)
         }
+
+        /// # Implementation
+        /// * ICygnusDAO
+        fn balanceOf(self: @ContractState, account: ContractAddress) -> u128 {
+            self._balances.read(account)
+        }
+
 
         /// # Implementation
         /// * ICygnusDAO
@@ -270,6 +302,17 @@ mod CygnusDAO {
         /// # Implementation
         /// * ICygnusDAO
         fn transfer_from(
+            ref self: ContractState, sender: ContractAddress, recipient: ContractAddress, amount: u128
+        ) -> bool {
+            let caller = get_caller_address();
+            self._spend_allowance(sender, caller, amount);
+            self._transfer(sender, recipient, amount);
+            true
+        }
+
+        /// # Implementation
+        /// * ICygnusDAO
+        fn transferFrom(
             ref self: ContractState, sender: ContractAddress, recipient: ContractAddress, amount: u128
         ) -> bool {
             let caller = get_caller_address();
@@ -371,60 +414,95 @@ mod CygnusDAO {
         ///                                  Ethereum Mainnet <> Starknet Bridge
         /// ---------------------------------------------------------------------------------------------------
 
+        /// # Implementation
+        /// * ICygnusDAO
+        fn cyg_token_mainnet(self: @ContractState) -> felt252 {
+            self._l1_teleporter.read()
+        }
+
         /// # Security
         /// * Only-owner
         ///
         /// # Implementation
         /// * ICygnusDAO
-        fn set_cyg_teleporter(ref self: ContractState, new_cyg_teleporter: ContractAddress) {
+        fn set_cyg_token_mainnet(ref self: ContractState, new_cyg_teleporter: felt252) {
             /// # Error
             /// * `only_owner` - Reverts if caller is not owner
             assert(get_caller_address() == self._owner.read(), 'only_owner');
 
             /// Teleporter up to now
-            let old_cyg_teleporter = self._teleporter.read();
+            let old_cyg_teleporter = self._l1_teleporter.read();
 
             /// # Error 
-            /// * `teleporter_already_set` - Reverts if pillars is not address zero
+            /// * `teleporter_already_set` - Reverts if teleporter is already set
             assert(old_cyg_teleporter.is_zero(), 'teleporter_already_set');
 
             /// Update storage
-            self._teleporter.write(new_cyg_teleporter);
+            self._l1_teleporter.write(new_cyg_teleporter);
 
             /// # Event
-            /// * `TeleporterSet`
-            self.emit(TeleporterSet { old_cyg_teleporter, new_cyg_teleporter });
+            /// * `NewTeleporter`
+            self.emit(NewTeleporter { old_cyg_teleporter, new_cyg_teleporter });
         }
 
+        /// We set amount as a u128 as we are transferring from Starknet to Mainnet and converting
+        /// it to felts
+        ///
         /// # Implementation
         /// * ICygnusDAO
-        fn teleport_mint(ref self: ContractState, to: ContractAddress, amount: u128) {
+        fn teleport(ref self: ContractState, recipient: felt252, teleport_amount: u128) {
+            /// Get caller to burn tokens from
+            let caller = get_caller_address();
+
             /// # Error
-            /// * `only_teleporter` - Reverts if sender is not the CYG bridge
-            assert(get_caller_address() == self._teleporter.read(), 'only_teleporter');
+            /// * `RECIPIENT_IS_ZERO`
+            assert(!recipient.is_zero(), 'Bridge: L1 address cannot be 0');
 
-            /// Mint `amount` to `to` and emit `Transfer` event
-            self._mint(to, amount);
-
-            /// # Event
-            /// * `TeleportMint`
-            self.emit(TeleportMint { to, amount });
-        }
-
-        /// # Implementation
-        /// * ICygnusDAO
-        fn teleport_burn(ref self: ContractState, account: ContractAddress, amount: u128) {
             /// # Error
-            /// * `only_teleporter` - Reverts if sender is not the CYG bridge
-            assert(get_caller_address() == self._teleporter.read(), 'only_teleporter');
+            /// * `INVALID_MAINNET_ADDRESS`
+            assert(recipient.into() < MAX_ETH_ADDRESS, 'invalid_mainnet_address');
 
-            /// Burn `amount` of tokens from `account`
-            self._burn(account, amount);
+            /// Burn tokens from caller
+            self._burn(caller, teleport_amount);
+
+            /// Send message to L1
+            let message: Array<felt252> = array![PROCESS_WITHDRAWAL, recipient, teleport_amount.into(), 0];
+            send_message_to_l1_syscall(self._l1_teleporter.read(), message.span());
 
             /// # Event
             /// * `TeleportBurn`
-            self.emit(TeleportBurn { account, amount });
+            self.emit(TeleportBurn { caller, teleport_amount });
         }
+    }
+
+    /// L1 Handler to handle teleports from Ethereum Mainnet to Starknet. Amount here is a u256 as we are transferring from
+    /// Mainnet to Starknet. We check for u128 overflow.
+    ///
+    /// # Arguments
+    /// * `from_address` - The ethereum address of the sender
+    /// * `recipient` - The starknet address of the recipient of the CYG tokens
+    /// * `amount` - The amount being bridged from mainnet to Starknet
+    #[l1_handler]
+    fn teleport_cyg_from_mainnet(
+        ref self: ContractState, from_address: felt252, recipient: ContractAddress, amount: u256
+    ) {
+        /// # Error
+        /// * `ONLY_TELEPORTER_ALLOWED` - Avoid if `from_address` is not the CYG L1 token
+        assert(from_address == self._l1_teleporter.read(), 'only_releporter');
+
+        /// # Error
+        /// * `U128_OVERFLOW`
+        assert(amount.high.is_zero(), 'u128 overflow');
+
+        /// Convert to u128
+        let teleport_amount: u128 = amount.try_into().unwrap();
+
+        /// Mint to recipient
+        self._mint(recipient, teleport_amount);
+
+        /// # Event
+        /// * `TeleportMint`
+        self.emit(TeleportMint { recipient, teleport_amount })
     }
 
 
@@ -434,11 +512,6 @@ mod CygnusDAO {
 
     #[generate_trait]
     impl InternalImpl of InternalTrait {
-        fn initializer(ref self: ContractState, name_: felt252, symbol_: felt252) {
-            self._name.write(name_);
-            self._symbol.write(symbol_);
-        }
-
         fn _increase_allowance(ref self: ContractState, spender: ContractAddress, added_value: u128) -> bool {
             let caller = get_caller_address();
             self._approve(caller, spender, self._allowances.read((caller, spender)) + added_value);
@@ -488,4 +561,3 @@ mod CygnusDAO {
         }
     }
 }
-
