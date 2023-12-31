@@ -42,7 +42,7 @@
 //  This is a Cairo implementation of the audited Cygnus Core contracts written originally in Solidity 0.8.9:
 //  https://github.com/CygnusDAO/core
 //
-//  Both borrowable and collateral (this) contracts follow the exact same implementation layout:
+//  Both borrowable and collateral (this) contracts follow the exact same architecture:
 //
 //  Architecture of core (`borrowable.cairo` and `collateral.cairo`)
 //    ├ 1. ERC20
@@ -103,27 +103,39 @@ trait ICollateral<T> {
 
     /// Returns the amount of tokens owned by `account`.
     fn balance_of(self: @T, account: ContractAddress) -> u128;
+    fn balanceOf(self: @T, account: ContractAddress) -> u128;
 
     /// Returns the value of tokens in existence.
     fn total_supply(self: @T) -> u128;
+    fn totalSupply(self: @T) -> u128;
 
-    /// Returns the remaining number of tokens that `spender` is allowed to spend on behalf of `owner` through `transfer_from`.
+    /// Returns the remaining number of tokens that `spender` is allowed to spend on behalf of `owner` 
+    /// through `transfer_from`.
+    /// This is zero by default. This value changes when `approve` or `transfer_from` are called.
     fn allowance(self: @T, owner: ContractAddress, spender: ContractAddress) -> u128;
 
     /// Sets `amount` as the allowance of `spender` over the caller’s tokens.
     fn approve(ref self: T, spender: ContractAddress, amount: u128) -> bool;
 
     /// Moves `amount` tokens from the caller's token balance to `to`.
+    /// Emits a `Transfer` event.
     fn transfer(ref self: T, recipient: ContractAddress, amount: u128) -> bool;
 
-    /// Moves `amount` tokens from `from` to `to`.
+    /// Moves `amount` tokens from `from` to `to` using the allowance mechanism.
+    /// `amount` is then deducted from the caller's allowance.
+    /// Emits a `Transfer` event.
     fn transfer_from(ref self: T, sender: ContractAddress, recipient: ContractAddress, amount: u128) -> bool;
+    fn transferFrom(ref self: T, sender: ContractAddress, recipient: ContractAddress, amount: u128) -> bool;
 
-    /// Increases the allowance granted from the caller to `spender` by `added_value`
+    /// Increases the allowance granted from the caller to `spender` by `added_value`.
+    /// Emits an `Approval` event indicating the updated allowance.
     fn increase_allowance(ref self: T, spender: ContractAddress, added_value: u128) -> bool;
+    fn increaseAllowance(ref self: T, spender: ContractAddress, added_value: u128) -> bool;
 
     /// Decreases the allowance granted from the caller to `spender` by `subtracted_value`.
+    /// Emits an `Approval` event indicating the updated allowance.
     fn decrease_allowance(ref self: T, spender: ContractAddress, subtracted_value: u128) -> bool;
+    fn decreaseAllowance(ref self: T, spender: ContractAddress, subtracted_value: u128) -> bool;
 
     ///--------------------------------------------------------------------------------------------------------
     ///                                          2. TERMINAL
@@ -159,15 +171,10 @@ trait ICollateral<T> {
     /// * The lending pool ID
     fn shuttle_id(self: @T) -> u32;
 
-    /// The total amount of LP's deposited in the strategy, updated after every payable function. 
-    ///
-    /// # Returns the total amount of the underlying LP Deposited in the strategy.
+    /// # Returns the total balance of the underlying deposited in the strategy
     fn total_balance(self: @T) -> u128;
 
-    /// View function of the total LP assets owned by the vault. Same as `totalBalance`, kept only for 
-    /// compatability with the borrowable arm.
-    ///
-    /// # Returns the total amount of the underlying LP Deposited in the strategy
+    /// Returns the total LP assets held by the vault (ie. total_balance)
     fn total_assets(self: @T) -> u128;
 
     /// Returns the exchange rate between 1 unit of CygLP shares to assets. IE. How much LP
@@ -372,7 +379,7 @@ mod Collateral {
     use cygnus::oracle::nebula::{ICygnusNebulaDispatcher, ICygnusNebulaDispatcherTrait};
     use cygnus::factory::hangar18::{IHangar18Dispatcher, IHangar18DispatcherTrait};
     use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait};
-    use cygnus::periphery::altair_call::{IAltairCallDispatcher, IAltairCallDispatcherTrait};
+    use cygnus::periphery::altair::{IAltairDispatcher, IAltairDispatcherTrait};
 
     /// # Imports
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
@@ -522,16 +529,12 @@ mod Collateral {
 
     /// The lowest possible liquidation profit, which liquidators receive (0%)
     const LIQ_INCENTIVE_MIN: u128 = 1_000000000_000000000;
-
     /// The highest possible liquidation profit, which liquidators receive (20%)
     const LIQ_INCENTIVE_MAX: u128 = 1_200000000_000000000;
-
     /// The max possible liquidation fee, which the protocol seizes from the borrower (10%)
     const LIQ_FEE_MAX: u128 = 100000000_000000000;
-
     /// The minimum possible debt ratio (LTV) for this lending pool (70%)
     const DEBT_RATIO_MIN: u128 = 700000000_000000000;
-
     /// The maximum possible debt ratio (LTV) for this lending pool (95%)
     const DEBT_RATIO_MAX: u128 = 950000000_000000000;
 
@@ -588,9 +591,22 @@ mod Collateral {
 
         /// # Implementation
         /// * ICollateral
+        fn totalSupply(self: @ContractState) -> u128 {
+            self.total_supply.read()
+        }
+
+        /// # Implementation
+        /// * ICollateral
         fn balance_of(self: @ContractState, account: ContractAddress) -> u128 {
             self.balances.read(account)
         }
+
+        /// # Implementation
+        /// * ICollateral
+        fn balanceOf(self: @ContractState, account: ContractAddress) -> u128 {
+            self.balances.read(account)
+        }
+
 
         /// # Implementation
         /// * ICollateral
@@ -639,7 +655,28 @@ mod Collateral {
 
         /// # Implementation
         /// * ICollateral
+        fn transferFrom(
+            ref self: ContractState, sender: ContractAddress, recipient: ContractAddress, amount: u128
+        ) -> bool {
+            /// Before transfer hook - Same as above
+            self._before_token_transfer(sender, recipient, amount);
+
+            /// Check allowance and transfer
+            let caller = get_caller_address();
+            self._spend_allowance(sender, caller, amount);
+            self._transfer(sender, recipient, amount);
+            true
+        }
+
+        /// # Implementation
+        /// * ICollateral
         fn increase_allowance(ref self: ContractState, spender: ContractAddress, added_value: u128) -> bool {
+            self._increase_allowance(spender, added_value)
+        }
+
+        /// # Implementation
+        /// * ICollateral
+        fn increaseAllowance(ref self: ContractState, spender: ContractAddress, added_value: u128) -> bool {
             self._increase_allowance(spender, added_value)
         }
 
@@ -648,6 +685,13 @@ mod Collateral {
         fn decrease_allowance(ref self: ContractState, spender: ContractAddress, subtracted_value: u128) -> bool {
             self._decrease_allowance(spender, subtracted_value)
         }
+
+        /// # Implementation
+        /// * ICollateral
+        fn decreaseAllowance(ref self: ContractState, spender: ContractAddress, subtracted_value: u128) -> bool {
+            self._decrease_allowance(spender, subtracted_value)
+        }
+
 
         /// ---------------------------------------------------------------------------------------------------
         ///                                          2. TERMINAL
@@ -736,7 +780,7 @@ mod Collateral {
             let receiver = get_contract_address();
 
             // Transfer LPs to vault
-            self.underlying.read().transferFrom(caller.into(), receiver.into(), assets.into());
+            self.underlying.read().transferFrom(caller, receiver, assets.into());
 
             // Burn 1000 shares to address zero, this is only for the first depositor
             if (self.total_supply.read() == 0) {
@@ -794,7 +838,7 @@ mod Collateral {
             self._burn(owner, shares);
 
             /// Transfer usd to recipient
-            self.underlying.read().transfer(recipient.into(), assets.into());
+            self.underlying.read().transfer(recipient, assets.into());
 
             /// # Event
             /// * Withdraw
@@ -1007,16 +1051,11 @@ mod Collateral {
                 return false;
             }
 
-            // Never underflows
-            let final_balance = balance - amount;
-
-            // Get the amount of LPs the borrower currently would have access to from the vault
-            // after withdrawing `amount` 
-            let lp_amount = self._convert_to_assets(final_balance);
+            // Get the amount of LPs the borrower currently would have access to from the vault after withdrawing `amount` 
+            let lp_amount = self._convert_to_assets(balance - amount);
 
             // Get borrower`s latest borrow balance (with interests)
-            let borrowable = self.twin_star.read();
-            let (_, borrow_balance) = borrowable.get_borrow_balance(borrower);
+            let (_, borrow_balance) = self.twin_star.read().get_borrow_balance(borrower);
 
             // Given the current borrow balance and the lp amount, get the collateral needed
             let (_, shortfall) = self._collateral_needed(lp_amount, borrow_balance);
@@ -1025,9 +1064,6 @@ mod Collateral {
             shortfall == 0
         }
 
-        /// This is a quick view function to get the current health of the borrower and position.
-        /// Not used by any important functions.
-        ///
         /// # Implementation
         /// * ICollateral
         fn get_borrower_position(self: @ContractState, borrower: ContractAddress) -> (u128, u128, u128) {
@@ -1161,7 +1197,7 @@ mod Collateral {
             // repay user loans (if any) and transfer back the equivalent of the LP redeemed in CygLP to this contract.
             if !calldata.recipient.is_zero() {
                 /// Get the caller address, could be any contract that subscribes to the IAltairCall interface
-                let altair = IAltairCallDispatcher { contract_address: caller };
+                let altair = IAltairDispatcher { contract_address: caller };
 
                 /// Pass calldata to router
                 usd_received = altair.altair_redeem_u91A(caller, redeem_amount, calldata);
@@ -1177,7 +1213,7 @@ mod Collateral {
             /// Burn the LP. Escapes `can_redeem` as we are burning directly from contract
             self._burn(get_contract_address(), cyg_lp_received);
 
-            /// Update balance and unlock
+            /// Unlock
             self._update_and_unlock();
 
             usd_received
@@ -1325,7 +1361,19 @@ mod Collateral {
         fn _before_token_transfer(
             ref self: ContractState, account: ContractAddress, to: ContractAddress, amount: u128
         ) {
-            self._before_transfer(account, to, amount);
+            // Escape in case of `flashRedeemAltair()`
+            // This contract should never have CygLP outside of flash redeeming. If a user is flash redeeming it requires them
+            // to `transfer()` or `transferFrom()` to this address first, and it will check `canRedeem` before transfer.
+            if (account == get_contract_address()) {
+                return;
+            }
+
+            // Even though we use borrow indices we still try and accrue
+            self.twin_star.read().accrue_interest();
+
+            /// # Error
+            /// * `Insufficient Liquidity` - Avoid if this transfer puts the user in shortfall
+            assert(self.can_redeem(account, amount), 'insufficient_liquidity')
         }
     }
 
@@ -1491,7 +1539,7 @@ mod Collateral {
         /// across various dexes/lps.
         #[inline(always)]
         fn _preview_total_balance(ref self: ContractState) -> u128 {
-            self.underlying.read().balanceOf(get_contract_address().into()).try_into().unwrap()
+            self.underlying.read().balanceOf(get_contract_address()).try_into().unwrap()
         }
 
         /// Hook that handles underlying deposits into the strategy
@@ -1508,27 +1556,6 @@ mod Collateral {
         /// * `amount` - The amount of underlying LP to deposit into the strategy
         #[inline(always)]
         fn _before_withdraw(ref self: ContractState, amount: u128) { /// Jediswap has no strategy
-        }
-
-        /// Hook that handles underlying withdrawals from the strategy
-        ///
-        /// # Arguments
-        /// * `amount` - The amount of underlying LP to deposit into the strategy
-        #[inline(always)]
-        fn _before_transfer(ref self: ContractState, account: ContractAddress, to: ContractAddress, amount: u128) {
-            // Escape in case of `flashRedeemAltair()`
-            // This contract should never have CygLP outside of flash redeeming. If a user is flash redeeming it requires them
-            // to `transfer()` or `transferFrom()` to this address first, and it will check `canRedeem` before transfer.
-            if (account == get_contract_address()) {
-                return;
-            }
-
-            // Even though we use borrow indices we still try and accrue
-            self.twin_star.read().accrue_interest();
-
-            /// # Error
-            /// * `Insufficient Liquidity` - Avoid if this transfer puts the user in shortfall
-            assert(self.can_redeem(account, amount), 'insufficient_liquidity')
         }
     }
 
