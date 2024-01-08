@@ -101,7 +101,6 @@ trait IPillarsOfCreation<T> {
     /// * The shuttle struct for this borrowable -> collateral shuttle
     fn get_shuttle_info(self: @T, borrowable: ContractAddress, collateral: ContractAddress) -> ShuttleInfo;
 
-
     /// Mapping to get the stored info for each user that is receiving CYG rewards.
     /// borrowable -> collateral -> user = UserInfo struct
     /// 
@@ -216,7 +215,6 @@ trait IPillarsOfCreation<T> {
     /// * `astronaut` - The address of the borrower or lender
     fn pending_cyg_all(self: @T, astronaut: ContractAddress) -> u128;
 
-
     /// ------------- Used for quick reporting purposes, not used by the pillars itself -------------
 
     /// # Returns
@@ -263,7 +261,6 @@ trait IPillarsOfCreation<T> {
     /// # Returns
     /// * How far along we are until supernova in %, ie blocks_since_birth / total_duration
     fn total_progression(self: @T) -> u128;
-
 
     /// # Returns
     /// * Whether we are doomed or not
@@ -531,8 +528,6 @@ mod PillarsOfCreation {
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     3. STORAGE
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
-
-    use snforge_std::PrintTrait;
 
     #[storage]
     struct Storage {

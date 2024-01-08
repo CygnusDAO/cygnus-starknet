@@ -21,7 +21,6 @@ mod ERC20 {
     use zeroable::Zeroable;
 
     use super::IERC20;
-    use debug::PrintTrait;
 
     #[storage]
     struct Storage {

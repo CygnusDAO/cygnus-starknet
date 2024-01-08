@@ -1,6 +1,7 @@
 use starknet::ContractAddress;
 use cygnus::data::registry::{Nebula};
 use cygnus::oracle::nebula::{ICygnusNebulaDispatcher, ICygnusNebulaDispatcherTrait};
+use cygnus::data::nebula::{LPInfo};
 use array::ArrayTrait;
 
 /// Interface - Oracle Registry
@@ -67,9 +68,7 @@ trait INebulaRegistry<T> {
     /// * Array of the reserves of each token in the LP
     /// * Array of decimals of each token in the LP
     /// * Array of prices of each token in the LP
-    fn get_lp_token_info(
-        self: @T, lp_token_pair: ContractAddress
-    ) -> (Array<ContractAddress>, Array<u256>, Array<u256>, Array<u256>);
+    fn get_lp_token_info(self: @T, lp_token_pair: ContractAddress) -> LPInfo;
 
     /// Array of nebulas
     ///
@@ -90,8 +89,8 @@ trait INebulaRegistry<T> {
     /// * Only-admin
     ///
     /// # Arguments
-    /// * `new_nebula` - The address of the new nebula
-    fn create_nebula(ref self: T, new_nebula: ContractAddress);
+    /// * `nebula_address` - The address of the new nebula
+    fn create_nebula(ref self: T, nebula_address: ContractAddress);
 
     /// Adds an LP oracle to a nebula in the registry. Only the registry can initialize
     /// Nebulas and Oracles. If an oracle for an LP is not set, then pools cannot be deployed
@@ -148,6 +147,7 @@ mod NebulaRegistry {
 
     /// # Data
     use cygnus::data::registry::{Nebula};
+    use cygnus::data::nebula::{LPInfo};
 
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     2. EVENTS
@@ -189,7 +189,7 @@ mod NebulaRegistry {
     struct NewNebula {
         name: felt252,
         nebula_id: u32,
-        new_nebula: ContractAddress,
+        nebula_address: ContractAddress,
         created_at: u64
     }
 
@@ -301,16 +301,12 @@ mod NebulaRegistry {
 
         /// # Implementation
         /// * INebulaRegistry
-        fn get_lp_token_info(
-            self: @ContractState, lp_token_pair: ContractAddress
-        ) -> (Array<ContractAddress>, Array<u256>, Array<u256>, Array<u256>) {
-            // TODO
-            let mut tokens = array![];
-            let mut reserves = array![];
-            let mut decimals = array![];
-            let mut price = array![];
+        fn get_lp_token_info(self: @ContractState, lp_token_pair: ContractAddress) -> LPInfo {
+            /// Read nebula for this LP
+            let nebula = self.lp_nebulas.read(lp_token_pair);
 
-            (tokens, reserves, decimals, price)
+            /// Return price from oracle
+            ICygnusNebulaDispatcher { contract_address: nebula }.lp_token_info(lp_token_pair)
         }
 
         /// ───────────────────────────── NON-CONSTANT FUNCTIONS ─────────────────────────────────
@@ -364,40 +360,40 @@ mod NebulaRegistry {
         ///
         /// # Implementation
         /// * INebulaRegistry
-        fn create_nebula(ref self: ContractState, new_nebula: ContractAddress) {
+        fn create_nebula(ref self: ContractState, nebula_address: ContractAddress) {
             // Only admin
             self.check_admin();
 
             /// # Error
             /// * `ALREADY_CREATED` - Reverts if nebula is already created
-            assert(self.nebulas.read(new_nebula).created_at == 0, RegistryErrors::ALREADY_CREATED);
+            assert(self.nebulas.read(nebula_address).created_at == 0, RegistryErrors::ALREADY_CREATED);
 
             // Get unique ID
             let nebula_id: u32 = self.total_nebulas.read();
 
             // Get human friendly name for the nebula
-            let name: felt252 = ICygnusNebulaDispatcher { contract_address: new_nebula }.name();
+            let name: felt252 = ICygnusNebulaDispatcher { contract_address: nebula_address }.name();
 
             // Get timestamp
             let created_at: u64 = get_block_timestamp();
 
             // Create nebula
             let nebula: Nebula = Nebula {
-                name: name, nebula_address: new_nebula, nebula_id: nebula_id, total_oracles: 0, created_at: created_at
+                name, nebula_address, nebula_id, total_oracles: 0, created_at
             };
 
             // Store in `array`
             self.all_nebulas.write(nebula_id, nebula);
 
             // Mapping: nebula address => nebula struct
-            self.nebulas.write(new_nebula, nebula);
+            self.nebulas.write(nebula_address, nebula);
 
             // Update nebulas
             self.total_nebulas.write(nebula_id + 1);
 
             /// # Event
             /// * `NewNebula`
-            self.emit(NewNebula { name, nebula_id, new_nebula, created_at });
+            self.emit(NewNebula { name, nebula_id, nebula_address, created_at });
         }
 
         /// # Security

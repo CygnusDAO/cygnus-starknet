@@ -7,4 +7,5 @@ mod AltairErrors {
     const CALLER_NOT_BORROWABLE: felt252 = 'caller_not_borrowable';
     const CALLER_NOT_COLLATERAL: felt252 = 'caller_not_collateral';
     const SENDER_NOT_ROUTER: felt252 = 'sender_not_router';
+    const ALTAIR_EXTENSION_NOT_SET: felt252 = 'extension_not_set';
 }

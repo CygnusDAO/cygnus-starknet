@@ -2,7 +2,9 @@
 
 // Libraries
 use starknet::ContractAddress;
-use cygnus::data::altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition};
+use cygnus::data::altair::{
+    ShuttleInfoC, ShuttleInfoB, BorrowerPosition, LenderPosition, SinglePosition, SinglePositionResult
+};
 use cygnus::data::calldata::{LeverageCalldata, DeleverageCalldata, Aggregator};
 
 /// # Interface - Altair
@@ -89,6 +91,63 @@ trait IAltair<T> {
     /// # Returns
     /// * The amount of token0 and token1 received
     fn get_assets_for_shares(self: @T, lp_token: ContractAddress, shares: u128) -> (u128, u128);
+
+    /// -------------------------------------------------------------------------------------------------------
+    ///                                        QUICK USER POSITIONS
+    /// -------------------------------------------------------------------------------------------------------
+
+    /// These functions are for reporting purposes only, they serve no value to the router itself.
+
+    /// # Arguments
+    /// * `shuttle_id` - The ID of the shuttle
+    ///
+    /// # Returns
+    /// * The Collateral shuttle struct for `shuttle_id`
+    /// * The Borrowable shuttle struct for `shuttle_id`
+    fn get_shuttle_info_by_id(self: @T, shuttle_id: u32) -> (ShuttleInfoC, ShuttleInfoB);
+
+    /// # Arguments
+    /// * `shuttle_id` - The ID of the shuttle
+    /// * `borrower` - The address of the borrower
+    ///
+    /// # Returns
+    /// * The Borrower position struct
+    fn latest_borrower_position(self: @T, shuttle_id: u32, borrower: ContractAddress) -> BorrowerPosition;
+
+    /// The user's borrow positions for all pools
+    ///
+    /// # Arguments
+    /// * `borrower` - The address of the borrower
+    ///
+    /// # Returns
+    /// * The principal, borrow balance and USD position for all collaterals
+    fn latest_borrower_position_all(self: @T, borrower: ContractAddress) -> (u128, u128, u128);
+
+    /// # Arguments
+    /// * `shuttle_id` - The ID of the shuttle
+    /// * `lender` - The address of the lender
+    ///
+    /// # Returns
+    /// * The Lender position struct
+    fn latest_lender_position(self: @T, shuttle_id: u32, lender: ContractAddress) -> LenderPosition;
+
+    /// The user's lending positions for all pools
+    ///
+    /// # Arguments
+    /// * `lender` - The address of the lender
+    ///
+    /// # Returns
+    /// * The cyg_usd balance, usdc balance and position in USD for all borrowables
+    fn latest_lender_position_all(self: @T, lender: ContractAddress) -> (u128, u128, u128);
+
+    /// Positions for an array of borrowers
+    ///
+    /// # Arguments
+    /// * `borrowers` - Array of structs of single positions for borrowers { shuttle_id, borrower_address }
+    ///
+    /// # Returns
+    /// * Array of full borrowers positions
+    fn latest_cygnus_positions(self: @T, borrowers: Array<SinglePosition>) -> Array<SinglePositionResult>;
 
     /// -------------------------------------------------------------------------------------------------------
     ///                                      NON-CONSTANT FUNCTIONS
@@ -263,23 +322,6 @@ trait IAltair<T> {
     /// # Security
     /// * Only-admin
     fn set_altair_extension(ref self: T, shuttle_id: u32, extension: ContractAddress);
-
-    /// # Arguments
-    /// * `shuttle_id` - The ID of the shuttle
-    ///
-    /// # Returns
-    /// * The Collateral shuttle struct for `shuttle_id`
-    /// * The Borrowable shuttle struct for `shuttle_id`
-    fn get_shuttle_info_by_id(self: @T, shuttle_id: u32) -> (ShuttleInfoC, ShuttleInfoB);
-
-    /// # Arguments
-    /// * `shuttle_id` - The ID of the shuttle
-    /// * `borrower` - The address of the borrower
-    ///
-    /// # Returns
-    /// * The Borrower position struct
-    fn latest_borrower_position(self: @T, shuttle_id: u32, borrower: ContractAddress) -> BorrowerPosition;
-    fn latest_borrower_position_all(self: @T, borrower: ContractAddress) -> (u128, u128, u128);
 }
 
 
@@ -303,8 +345,8 @@ mod Altair {
     /// # Libraries
     use cygnus::libraries::full_math_lib::FullMathLib::FixedPointMathLibTrait;
     use starknet::{
-        ContractAddress, get_caller_address, get_contract_address, get_block_timestamp,
-        contract_address_const, call_contract_syscall
+        ContractAddress, get_caller_address, get_contract_address, get_block_timestamp, contract_address_const,
+        call_contract_syscall
     };
 
     /// # Errors
@@ -313,7 +355,7 @@ mod Altair {
     /// # Data
     use cygnus::data::{
         shuttle::{Shuttle}, calldata::{LeverageCalldata, DeleverageCalldata, Aggregator},
-        altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition}
+        altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition, LenderPosition, SinglePosition, SinglePositionResult}
     };
 
     /// Aggregators
@@ -634,13 +676,15 @@ mod Altair {
         fn altair_borrow_09E(
             ref self: ContractState, sender: ContractAddress, borrow_amount: u128, calldata: LeverageCalldata
         ) -> u128 {
+            let caller = get_caller_address();
+
             /// # Error
             /// * `WRONG_SENDER`
             assert(sender == get_contract_address(), Errors::SENDER_NOT_ROUTER);
 
-            /// # Error TODO
+            /// # Error
             /// * `NOT_BORROWABLE` - Avoid if caller is not borrowable
-            ///assert(get_caller_address() == calldata.borrowable, Errors::CALLER_NOT_BORROWABLE);
+            assert(get_caller_address() == calldata.borrowable, Errors::CALLER_NOT_BORROWABLE);
 
             /// By now this contract has USDC that were flash borrowed from the collateral. Convert all USDC into
             /// more LP and deposit back in collateral, minting CygLP to the receiver. Borrowable contract does
@@ -650,17 +694,6 @@ mod Altair {
 
         /// 5. DELEVERAGE -------------------------------------------------
 
-        /// Burns the LP and buys USDC, repaying any debt the user may have (if any) and burning the user's CygLP
-        ///
-        /// # Arguments
-        /// * `lp_token_pair` - The address of the LP Token
-        /// * `collateral` - The address of the Cygnus collateral
-        /// * `borrowable` - The address of the Cygnus borrowable
-        /// * `cyg_lp_amount` - The amount of CygLP to deleverage
-        /// * `usd_amount_min` - The minimum allowed of usdc to be received by redeeming `cyg_lp_amount` and selling assets
-        /// * `deadline` - TX expires after this timestamp
-        /// * `swapdata` - The swapdata for the aggregators (empty if performed on-chain via sithswap, jediswap, etc.)
-        ///
         /// # Returns
         /// * The amount of LP minted
         fn deleverage(
@@ -716,9 +749,9 @@ mod Altair {
             /// * `WRONG_SENDER`
             assert(sender == get_contract_address(), Errors::SENDER_NOT_ROUTER);
 
-            /// # Error TODO
+            /// # Error
             /// * `NOT_COLLATERAL` - Avoid if caller is not collateral
-            ///assert(get_caller_address() == calldata.collateral, Errors::CALLER_NOT_COLLATERAL);
+            assert(get_caller_address() == calldata.collateral, Errors::CALLER_NOT_COLLATERAL);
 
             /// By now this contract has LPs that were flash redeemed from collateral. Burn the LP, receive
             /// token0 and token1 assets, convert to USDC, repay loan or part of the loan. Collateral contract
@@ -784,9 +817,9 @@ mod Altair {
             /// * `WRONG_SENDER`
             assert(sender == get_contract_address(), 'wrong_sender');
 
-            /// # Error TODO
-            /// * `NOT_COLLATERAL` - Avoid if caller is not borrowable
-            ///assert(get_caller_address() == calldata.borrowable, 'not_borrowable');
+            /// # Error
+            /// * `NOT_BORROWABLE` - Avoid if caller is not borrowable
+            assert(get_caller_address() == calldata.borrowable, 'not_borrowable');
 
             /// By now this contract has LPs that were flash redeemed from collateral. Burn the LP, receive
             /// token0 and token1 assets, convert to USDC, repay loan or part of the loan. Collateral contract
@@ -918,6 +951,50 @@ mod Altair {
 
         /// # Implementation
         /// * IAltair
+        fn latest_lender_position(self: @ContractState, shuttle_id: u32, lender: ContractAddress) -> LenderPosition {
+            let shuttle = self.hangar18.read().all_shuttles(shuttle_id);
+            let (cyg_usd_balance, position_usdc, position_usd) = shuttle.borrowable.get_lender_position(lender);
+            let usd_price = shuttle.borrowable.get_usd_price();
+            let exchange_rate = shuttle.borrowable.exchange_rate();
+            LenderPosition { shuttle_id, cyg_usd_balance, position_usdc, position_usd, usd_price, exchange_rate }
+        }
+
+        /// # Implementation
+        /// * IAltair
+        fn latest_lender_position_all(self: @ContractState, lender: ContractAddress) -> (u128, u128, u128) {
+            /// Get length of shuttles deployed
+            let total_shuttles = self.hangar18.read().total_shuttles_deployed();
+
+            /// Accumulators
+            let mut cyg_usd_balance = 0;
+            let mut position_usdc = 0;
+            let mut position_usd = 0;
+
+            /// Break case
+            let mut len = 0;
+
+            loop {
+                if len == total_shuttles {
+                    break;
+                }
+
+                /// Get shuttle for this ID
+                let shuttle = self.hangar18.read().all_shuttles(len);
+
+                /// Principal and borrow balance (ie. owed amount)
+                let (_cyg_usd_balance, _position_usdc, _position_usd) = shuttle.borrowable.get_lender_position(lender);
+
+                cyg_usd_balance += _cyg_usd_balance;
+                position_usdc += _position_usdc;
+                position_usd += _position_usd;
+                len += 1;
+            };
+
+            (cyg_usd_balance, position_usdc, position_usd)
+        }
+
+        /// # Implementation
+        /// * IAltair
         fn get_shuttle_info_by_id(self: @ContractState, shuttle_id: u32) -> (ShuttleInfoC, ShuttleInfoB) {
             /// Get the shuttle with `shuttle_id` from the factory
             let shuttle = self.hangar18.read().all_shuttles(shuttle_id);
@@ -957,6 +1034,58 @@ mod Altair {
             };
 
             (shuttleC, shuttleB)
+        }
+
+        /// # Implementation
+        /// * IAltair
+        fn latest_cygnus_positions(
+            self: @ContractState, borrowers: Array<SinglePosition>
+        ) -> Array<SinglePositionResult> {
+            /// Get borrower's array length
+            let total_borrowers = borrowers.len();
+
+            /// The return variable
+            let mut positions: Array<SinglePositionResult> = array![];
+
+            /// Escape
+            let mut length = 0;
+
+            /// Loop and get position for each borrower
+            loop {
+                /// Escape
+                if length == total_borrowers {
+                    break;
+                }
+
+                /// SinglePosition { shuttle_id, borrower }
+                let shuttle_id = *borrowers.at(length).shuttle_id;
+                let borrower = *borrowers.at(length).borrower;
+
+                /// Get the shuttle for shuttle_id from the hangar18 contract
+                let shuttle = self.hangar18.read().all_shuttles(shuttle_id);
+
+                /// LP Balance, position denominated in USD and health
+                let (position_lp, position_usd, health) = shuttle.collateral.get_borrower_position(borrower);
+                /// CygLP Balance
+                let cyg_lp_balance = shuttle.collateral.balance_of(borrower);
+                /// Borrow balance
+                let (_, borrow_balance) = shuttle.borrowable.get_borrow_balance(borrower);
+                /// The liquidation incentive for this collateral
+                let liquidation_incentive = shuttle.collateral.liquidation_incentive();
+
+                /// Add position to array
+                positions
+                    .append(
+                        SinglePositionResult {
+                            cyg_lp_balance, position_lp, position_usd, borrow_balance, health, liquidation_incentive
+                        }
+                    );
+
+                /// Increase acc
+                length += 1;
+            };
+
+            positions
         }
     }
 
@@ -1029,11 +1158,11 @@ mod Altair {
             /// Burn the LP and receive amount0 and amount1 of the underlying LP assets
             let (amount0, amount1) = lp_token.burn(get_contract_address());
 
-            /// Convert all to USDC - TODO CLEAN DUST?
-            self
-                ._convert_liquidity_to_usd(
-                    amount0, amount1, lp_token.token0(), lp_token.token1(), calldata.aggregator, calldata.swapdata
-                );
+            let token0 = lp_token.token0();
+            let token1 = lp_token.token1();
+
+            /// Convert all to USDC
+            self._convert_liquidity_to_usd(amount0, amount1, token0, token1, calldata.aggregator, calldata.swapdata);
 
             /// Check that the amount received of USDC after deleveraging is not below min.
             let usd = self.usd.read().contract_address;
@@ -1049,6 +1178,8 @@ mod Altair {
             /// Transfer CygLP from the borrower to the collateral contract to perform burn
             let collateral = ICollateralDispatcher { contract_address: calldata.collateral };
             collateral.transfer_from(calldata.recipient, collateral.contract_address, calldata.cyg_lp_amount);
+
+            self._clean_dust(token0, token1, calldata.recipient);
 
             /// Return amount received of USDC, helpful when simulating txns, has no use in core itself
             usd_amount
@@ -1081,9 +1212,9 @@ mod Altair {
             if token0 == usd.contract_address || token1 == usd.contract_address {
                 /// One is usdc, get the other and swap all to usdc and escape
                 let (swap_from, swap_amount, swapdata) = if token0 == usd.contract_address {
-                    (token1, amount1.try_into().unwrap(), *swapdata.at(1))
+                    (token1, amount1, *swapdata.at(1))
                 } else {
-                    (token0, amount0.try_into().unwrap(), *swapdata.at(0))
+                    (token0, amount0, *swapdata.at(0))
                 };
 
                 /// Swap the other to USDC
@@ -1135,7 +1266,6 @@ mod Altair {
         }
     }
 
-
     #[generate_trait]
     impl LeverageImpl of LeverageImplTrait {
         /// Mints LP to calldata's receiver and deposits it in the Cygnus Collateral contract
@@ -1165,6 +1295,8 @@ mod Altair {
 
             /// Deposit LP in cygnus and mint CygLP to recipient
             collateral.deposit(liquidity, calldata.recipient);
+
+            self._clean_dust(token0, token1, calldata.recipient);
 
             /// Return LP Minted - useful for static calls, simulate tx, etc. has no use otherwise
             liquidity
@@ -1388,6 +1520,32 @@ mod Altair {
             /// `TRANSACTION_EXPIRED` - Revert if we are passed deadline
             assert(get_block_timestamp() <= deadline, Errors::TRANSACTION_EXPIRED);
         }
+
+        /// Use deadline control for certain borrow/swap actions
+        ///
+        /// # Arguments
+        /// * `deadline` - The maximum timestamp allowed for tx to succeed
+        #[inline(always)]
+        fn _clean_dust(
+            ref self: ContractState, token0: ContractAddress, token1: ContractAddress, recipient: ContractAddress
+        ) {
+            let balance = IERC20Dispatcher { contract_address: token0 }.balanceOf(get_contract_address());
+            if (balance > 0) {
+                IERC20Dispatcher { contract_address: token0 }.transfer(recipient, balance);
+            }
+
+            let balance = IERC20Dispatcher { contract_address: token1 }.balanceOf(get_contract_address());
+            if (balance > 0) {
+                IERC20Dispatcher { contract_address: token1 }.transfer(recipient, balance);
+            }
+
+            let usd = self.usd.read().contract_address;
+            let balance = IERC20Dispatcher { contract_address: usd }.balanceOf(get_contract_address());
+            if (balance > 0) {
+                IERC20Dispatcher { contract_address: usd }.transfer(recipient, balance);
+            }
+        }
+
 
         /// Helpful function to ensure that borrowers never repay more than their owed amount
         ///

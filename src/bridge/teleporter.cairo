@@ -92,7 +92,7 @@ mod CygnusDAO {
         assert(from_address == self.ethereum_teleporter.read(), 'ONLY_TELEPORTER');
 
         /// Teleport mint CYG token to recipient
-        self.cyg_token.read().teleport_mint(recipient, amount.try_into().unwrap());
+        //self.cyg_token.read().teleport_mint(recipient, amount.try_into().unwrap());
 
         /// # Event
         /// * `HandleTeleport`

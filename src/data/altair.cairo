@@ -1,3 +1,5 @@
+use starknet::ContractAddress;
+
 #[derive(Drop, Serde)]
 struct ShuttleInfoC {
     shuttle_id: u32,
@@ -39,4 +41,30 @@ struct BorrowerPosition {
     liquidity: u128,
     shortfall: u128,
     exchange_rate: u128,
+}
+
+#[derive(Drop, Serde)]
+struct LenderPosition {
+    shuttle_id: u32,
+    cyg_usd_balance: u128,
+    position_usdc: u128,
+    position_usd: u128,
+    usd_price: u128,
+    exchange_rate: u128,
+}
+
+#[derive(Drop, Serde)]
+struct SinglePosition {
+    shuttle_id: u32,
+    borrower: ContractAddress,
+}
+
+#[derive(Drop, Serde)]
+struct SinglePositionResult {
+    cyg_lp_balance: u128,
+    position_lp: u128,
+    position_usd: u128,
+    borrow_balance: u128,
+    health: u128,
+    liquidation_incentive: u128,
 }

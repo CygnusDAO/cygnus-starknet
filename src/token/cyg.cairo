@@ -103,8 +103,8 @@ trait ICygnusDAO<T> {
     /// * Only-once
     ///
     /// # Arguments
-    /// * `new_cyg_teleporter` - The address of CYG on Ethereum Mainnet
-    fn set_cyg_token_mainnet(ref self: T, new_cyg_teleporter: felt252);
+    /// * `new_cyg_mainnet` - The address of CYG on Ethereum Mainnet
+    fn set_cyg_token_mainnet(ref self: T, new_cyg_mainnet: felt252);
 
     /// Teleports CYG from Starknet to Ethereum Mainnet
     ///
@@ -169,8 +169,8 @@ mod CygnusDAO {
     /// NewTeleporter
     #[derive(Drop, starknet::Event)]
     struct NewTeleporter {
-        old_cyg_teleporter: felt252,
-        new_cyg_teleporter: felt252
+        old_cyg_mainnet: felt252,
+        new_cyg_mainnet: felt252
     }
 
     /// TeleportMint
@@ -211,7 +211,7 @@ mod CygnusDAO {
         /// Initial owner, useless after setting pillars
         _owner: ContractAddress,
         /// CYG teleporter on Starknet
-        _l1_teleporter: felt252
+        cyg_token_mainnet: felt252
     }
 
     /// Maximum available CYG to be minted on Starknet
@@ -417,7 +417,7 @@ mod CygnusDAO {
         /// # Implementation
         /// * ICygnusDAO
         fn cyg_token_mainnet(self: @ContractState) -> felt252 {
-            self._l1_teleporter.read()
+            self.cyg_token_mainnet.read()
         }
 
         /// # Security
@@ -425,24 +425,24 @@ mod CygnusDAO {
         ///
         /// # Implementation
         /// * ICygnusDAO
-        fn set_cyg_token_mainnet(ref self: ContractState, new_cyg_teleporter: felt252) {
+        fn set_cyg_token_mainnet(ref self: ContractState, new_cyg_mainnet: felt252) {
             /// # Error
             /// * `only_owner` - Reverts if caller is not owner
             assert(get_caller_address() == self._owner.read(), 'only_owner');
 
             /// Teleporter up to now
-            let old_cyg_teleporter = self._l1_teleporter.read();
+            let old_cyg_mainnet = self.cyg_token_mainnet.read();
 
             /// # Error 
             /// * `teleporter_already_set` - Reverts if teleporter is already set
-            assert(old_cyg_teleporter.is_zero(), 'teleporter_already_set');
+            assert(old_cyg_mainnet.is_zero(), 'teleporter_already_set');
 
             /// Update storage
-            self._l1_teleporter.write(new_cyg_teleporter);
+            self.cyg_token_mainnet.write(new_cyg_mainnet);
 
             /// # Event
             /// * `NewTeleporter`
-            self.emit(NewTeleporter { old_cyg_teleporter, new_cyg_teleporter });
+            self.emit(NewTeleporter { old_cyg_mainnet, new_cyg_mainnet });
         }
 
         /// We set amount as a u128 as we are transferring from Starknet to Mainnet and converting
@@ -467,7 +467,7 @@ mod CygnusDAO {
 
             /// Send message to L1
             let message: Array<felt252> = array![PROCESS_WITHDRAWAL, recipient, teleport_amount.into(), 0];
-            send_message_to_l1_syscall(self._l1_teleporter.read(), message.span());
+            send_message_to_l1_syscall(self.cyg_token_mainnet.read(), message.span());
 
             /// # Event
             /// * `TeleportBurn`
@@ -488,7 +488,7 @@ mod CygnusDAO {
     ) {
         /// # Error
         /// * `ONLY_TELEPORTER_ALLOWED` - Avoid if `from_address` is not the CYG L1 token
-        assert(from_address == self._l1_teleporter.read(), 'only_releporter');
+        assert(from_address == self.cyg_token_mainnet.read(), 'only_releporter');
 
         /// # Error
         /// * `U128_OVERFLOW`
@@ -561,3 +561,4 @@ mod CygnusDAO {
         }
     }
 }
+

@@ -26,7 +26,6 @@
 /// * CygnusDAO
 use starknet::ContractAddress;
 use cygnus::oracle::pragma_interface::{DataType};
-use cygnus::token::univ2pair::{IUniswapV2PairDispatcher, IUniswapV2PairDispatcherTrait};
 use cygnus::data::nebula::{LPInfo, NebulaOracle};
 
 #[starknet::interface]
@@ -123,13 +122,13 @@ mod CygnusNebula {
     }
 
 
-    /// 8 is the decimals used by Pragma oracles for all SPOT price feeds
-    const AGGREGATOR_SCALAR: u128 = 10000000000; // 10 ** (18 - 8)
-
     /// The denomination price feed. To replace just replace `USDC` with other supported asset by Pragma
     /// and replace `DENOMINATION_SCALAR` with the correct asset scalar (ie. The price feed returns the price
     /// of the asset in 6 decimals, so denom scalar is 10 ** (18 -6))
     const DENOMINATION_PRICE_FEED: felt252 = 'USDC/USD';
+
+    /// 8 is the decimals used by Pragma oracles for all SPOT price feeds
+    const AGGREGATOR_SCALAR: u128 = 10000000000; // 10 ** (18 - 8)
 
     /// The scalar of the decimals used by Pragma for the DENOMINATION_PRICE_FEED
     const DENOMINATION_PRICE_SCALAR: u128 = 1000000000000; // 10 ** (18 - 6)
@@ -195,8 +194,8 @@ mod CygnusNebula {
             assert(oracle.initialized, 'oracle_not_initialized');
 
             /// Get the price of token0 and token1 from the oracle struct
-            let price0 = self.token_price(oracle.price_feed0);
-            let price1 = self.token_price(oracle.price_feed1);
+            let price0 = self._token_price(oracle.price_feed0);
+            let price1 = self._token_price(oracle.price_feed1);
 
             /// Compute the USD value of each token in the pool in 18 decimals (price[i] * reserves[i])
             let (res0, res1, _) = IUniswapV2PairDispatcher { contract_address: lp_token_pair }.get_reserves();
@@ -210,10 +209,9 @@ mod CygnusNebula {
             let lp_price_usd = LP_SCALAR.full_mul_div(value0.gm(value1), supply.try_into().unwrap());
 
             /// Return the price of the LP expressed in the denomination token (in our case, USDC, so 6 decimals)
-            let denom_price = self.denomination_price();
-            let lp_price = lp_price_usd.div_wad(denom_price * DENOMINATION_PRICE_SCALAR);
+            let denom_price = self._denomination_price();
 
-            lp_price
+            lp_price_usd.div_wad(denom_price * DENOMINATION_PRICE_SCALAR)
         }
 
         /// # Implementation
@@ -233,8 +231,8 @@ mod CygnusNebula {
             assert(oracle.initialized, 'oracle_not_initialized');
 
             /// Get the price of token0 and token1 from the oracle struct, 18 decimals
-            let price0 = self.token_price(oracle.price_feed0);
-            let price1 = self.token_price(oracle.price_feed1);
+            let price0 = self._token_price(oracle.price_feed0);
+            let price1 = self._token_price(oracle.price_feed1);
 
             /// Get the reserves
             let (res0, res1, _) = IUniswapV2PairDispatcher { contract_address: lp_token_pair }.get_reserves();
@@ -243,20 +241,18 @@ mod CygnusNebula {
             let value0 = price0.full_mul_div(res0.try_into().unwrap(), oracle.token0_decimals.into());
             let value1 = price1.full_mul_div(res1.try_into().unwrap(), oracle.token1_decimals.into());
 
-            let lp_token_info = LPInfo {
+            LPInfo {
                 token0: oracle.token0,
                 token1: oracle.token1,
                 token0_price: price0,
                 token1_price: price1,
-                token0_reserves: price0,
-                token1_reserves: price1,
+                token0_reserves: res0.try_into().unwrap(),
+                token1_reserves: res1.try_into().unwrap(),
                 token0_decimals: oracle.token0_decimals,
                 token1_decimals: oracle.token1_decimals,
                 reserves0_usd: value0,
                 reserves1_usd: value1
-            };
-
-            lp_token_info
+            }
         }
 
         /// # Implementation
@@ -268,6 +264,7 @@ mod CygnusNebula {
         /// # Implementation
         /// * ICygnusNebula
         fn get_nebula_oracle(self: @ContractState, lp_token_pair: ContractAddress) -> NebulaOracle {
+            /// Read lp token pair from storage
             let oracle = self.nebula_oracles.read(lp_token_pair);
 
             /// # Error
@@ -283,9 +280,8 @@ mod CygnusNebula {
         fn initialize_oracle(
             ref self: ContractState, lp_token_pair: ContractAddress, price_feed0: felt252, price_feed1: felt252
         ) {
-            /// # Error
-            /// * WRONG_CALLER - Revert if not called from registry
-            assert(get_caller_address() == self.nebula_registry.read().contract_address, 'wrong_caller');
+            /// Check sender
+            self._check_registry();
 
             /// Get oracle for `lp_token_pair`
             let mut lp_oracle: NebulaOracle = self.nebula_oracles.read(lp_token_pair);
@@ -350,28 +346,47 @@ mod CygnusNebula {
         /// # Implementation
         /// * ICygnusNebula
         fn denomination_token_price(self: @ContractState) -> u128 {
-            self.denomination_price()
+            self._denomination_price()
         }
     }
 
     #[generate_trait]
     impl InternalImpl of InternalTrait {
-        /// Reverts if caller is not registry
-        fn check_registry(self: @ContractState) {
+        /// Internal check to reverts if caller is not registry
+        fn _check_registry(self: @ContractState) {
             let caller = get_caller_address();
             assert(caller == self.nebula_registry.read().contract_address, 'wrong caller');
         }
 
-        /// Important: Only use this with feeds that have 8 decimals (which is most of Pragma feeds,
-        /// except USDC/USDT)
-        fn token_price(self: @ContractState, token_feed: felt252) -> u128 {
+        /// Gets a token's price from pragma internally
+        ///
+        /// # Arguments
+        /// * `token_feed` - The id for this token, ie. 'ETH/USD'
+        ///
+        /// # Returns
+        /// * The price of the token in 18 decimals
+        fn _token_price(self: @ContractState, token_feed: felt252) -> u128 {
+            /// DataType of asset for Pragma
             let asset = DataType::SpotEntry(token_feed);
+
+            /// Only USDC and USDT use 6 decimals, use this to avoid having to exp the decimals
+            if token_feed == 'USDC/USD' || token_feed == 'USDT/USD' {
+                return self.pragma_oracle.read().get_data_median(asset).price * DENOMINATION_PRICE_SCALAR;
+            }
+
+            /// Normal scalar
             self.pragma_oracle.read().get_data_median(asset).price * AGGREGATOR_SCALAR
         }
 
-        /// Price of the denomination token (in our case, USDC)
-        fn denomination_price(self: @ContractState) -> u128 {
+        /// Gets a the denomination's price from pragma internally, gas savings
+        ///
+        /// # Returns
+        /// * The price of the denomination token (in our case USDC) in 18 decimals
+        fn _denomination_price(self: @ContractState) -> u128 {
+            /// DataType of asset for Pragma
             let asset = DataType::SpotEntry(DENOMINATION_PRICE_FEED);
+
+            /// Price of denom in 18 decimals
             self.pragma_oracle.read().get_data_median(asset).price * DENOMINATION_PRICE_SCALAR
         }
     }

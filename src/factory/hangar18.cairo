@@ -10,8 +10,6 @@ use cygnus::registry::registry::{INebulaRegistryDispatcher, INebulaRegistryDispa
 use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait};
 use cygnus::terminal::collateral::{ICollateralDispatcher, ICollateralDispatcherTrait};
 
-/// TODO: Dao reserves contract
-
 /// # Interface - Hangar18
 #[starknet::interface]
 trait IHangar18<T> {
@@ -54,6 +52,8 @@ trait IHangar18<T> {
 
     /// Quick reporting functions on this chain to get TVLs in USD. Uses 6 decimals since our
     /// lending token is USDC.
+
+    fn chain_id(self: @T) -> felt252;
 
     /// Gets a lending pool tvl (usdc deposits + lp deposits) priced in USD
     ///
@@ -170,7 +170,7 @@ mod Hangar18 {
     use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait};
 
     /// # Libraries
-    use starknet::{ContractAddress, get_caller_address, contract_address_const, get_contract_address};
+    use starknet::{ContractAddress, get_caller_address, contract_address_const, get_contract_address, get_tx_info};
     use cygnus::libraries::full_math_lib::FullMathLib::FixedPointMathLibTrait;
 
     /// # Errors
@@ -304,7 +304,6 @@ mod Hangar18 {
         ///----------------------------------------------------------------------------------------------------
         ///                                        CONSTANT FUNCTIONS
         ///----------------------------------------------------------------------------------------------------
-
         /// # Implementation
         /// * IHangar18
         fn name(self: @ContractState) -> felt252 {
@@ -345,6 +344,12 @@ mod Hangar18 {
         /// * IHangar18
         fn native_token(self: @ContractState) -> ContractAddress {
             self.native_token.read()
+        }
+
+        /// # Implementation
+        /// * IHangar18
+        fn chain_id(self: @ContractState) -> felt252 {
+            get_tx_info().unbox().chain_id
         }
 
         /// # Implementation

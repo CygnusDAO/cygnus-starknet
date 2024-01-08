@@ -1,9 +1,23 @@
+/// # Module
+/// * `token` - Standard tokens/interfaces and the CYG Token
+mod token {
+    mod erc20;
+    mod univ2pair;
+    //mod sithpair;
+    mod cyg;
+}
 
-/// # Module - factory - The factory contract that stores deployers and keeps a record of all shuttles deployed
-/// * `hangar18` - The Cygnus factory contract that uses orbiters to deploy shuttles
-/// * `errors` - Hangar18 errors
-mod factory {
-    mod hangar18;
+/// # Module 
+/// * `bridge` - The CYG bridge between mainnet and starknet
+mod bridge {
+    mod teleporter;
+}
+
+/// # Module 
+/// * `terminal` - The core Cygnus contracts where users deposit liquidity/stablecoins
+mod terminal {
+    mod borrowable;
+    mod collateral;
     mod errors;
 }
 
@@ -16,39 +30,25 @@ mod orbiters {
     mod deneb;
 }
 
-/// # Module 
-/// * `terminal` - The core Cygnus contracts where users deposit liquidity/stablecoins
-mod terminal {
-    mod borrowable;
-    mod collateral;
+/// # Module - factory - The factory contract that stores deployers and keeps a record of all shuttles deployed
+/// * `hangar18` - The Cygnus factory contract that uses orbiters to deploy shuttles
+/// * `errors` - Hangar18 errors
+mod factory {
+    mod hangar18;
     mod errors;
 }
 
-/// # Module
-/// * `voids` - Strategies used by core
-mod voids {
-    mod zklend;
-}
-
-/// # Module
-/// * `periphery` - User friendly contracts to interact with core
-mod periphery {
-    mod altair;
-    mod altair_call;
-    mod errors;
-    mod integrations { 
-      mod jediswap_router;
-    }
-}
-
-/// # Module
-/// * `rewarder` - CYG rewarder contract
 mod rewarder {
     mod pillars;
 }
 
-/// # Module 
-/// * `data` - Data structures of all Cygnus contracts
+/// # Module - data - Data structures of all Cygnus contracts
+/// * `orbiter` - Holds data of albireo/deneb orbiters deployed and added to the hangar18 contract
+/// * `shuttle` - Keeps track of shuttles deployed on the factory
+/// * `registry` - Data of ebulas (LP oracles) deplpoyed. Ideally 1 per dex or 1 per type of collateral (BPTs, LPs, etc.)
+/// * `interest` - Interest rate variables of each borrowable contract with base rate, slope, kink and kink multiplier.
+/// * `calldata` - Calldata used by the periphery contract to interact with core to leverage/deleverage/flash liquidate positions
+/// * `pillars` - Data used by the CYG rewarder contract to keep track of lenders, borrowers and epochs
 mod data {
     mod orbiter;
     mod shuttle;
@@ -67,38 +67,40 @@ mod data {
     mod nebula;
 }
 
-/// # Module 
-/// * `registry` - The Registry of oracles deployed that keeps track of all LP oracles deployed by CygnusDAO
+/// # Module - registry - The LP Oracle registry that keeps track of all LP oracles deployed by CygnusDAO
+/// * `registry` - The registry contract where the factory reports to to check for oracles before deploying shuttles
+/// * `errors` - Registry errors
 mod registry {
     mod registry;
     mod errors;
 }
 
-/// # Module 
-/// * `oracle` - LP Oracle
+/// # Module - oracle - Nebulas (LP oracles) deployed
+/// * `nebula` - The nebula contract that handles the logic for pricing liquidity (BPTs, LPs, YAS positions, etc.)
 mod oracle {
     mod nebula;
     mod pragma_interface;
 }
 
 /// # Module - libraries - Libraries used by core and periphery contract
+/// * `full_math_lib` - Simple u128 math lib used by core/periphery contracts
+/// * `errors` - Math Library errors
 mod libraries {
     mod full_math_lib;
     mod date_time_lib;
     mod errors;
 }
 
-/// # Module
-/// * `token` - Standard tokens/interfaces and the CYG Token
-mod token {
-    mod erc20;
-    mod univ2pair;
-    mod cyg;
+mod voids {
+    mod zklend;
 }
 
-/// # Module 
-/// * `bridge` - The CYG bridge between mainnet and starknet
-mod bridge {
-    mod teleporter;
+mod periphery {
+    mod altair;
+    mod altair_x;
+    mod errors;
+    mod integrations {
+        mod jediswap_router;
+    }
 }
 

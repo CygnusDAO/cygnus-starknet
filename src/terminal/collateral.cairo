@@ -1156,6 +1156,9 @@ mod Collateral {
             /// Emit
             self.emit(Seize { liquidator, borrower, cyg_lp_amount });
 
+            /// Unlock
+            self._update_and_unlock();
+
             /// Return amount seized
             cyg_lp_amount
         }
