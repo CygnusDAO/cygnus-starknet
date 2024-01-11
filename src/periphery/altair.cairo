@@ -762,6 +762,7 @@ mod Altair {
 
         /// 6. FLASH LIQUIDATE -------------------------------------------------
 
+        /// TODO
         /// # Implementation
         /// * IAltair
         fn flash_liquidate(
@@ -1226,6 +1227,7 @@ mod Altair {
             self._swap_tokens_aggregator(token1, usd.contract_address, amount1, aggregator, *swapdata.at(1));
         }
 
+        /// TODO
         fn _flash_liquidate(
             ref self: ContractState, cyg_lp_amount: u128, repay_amount: u128, calldata: DeleverageCalldata
         ) {
@@ -1379,8 +1381,7 @@ mod Altair {
             let receiver = get_contract_address();
             let deadline = get_block_timestamp();
 
-            /// Always bridge through naitve token first if necessary. Checks if both token_in AND token_out are not 
-            /// native and adds extra path if necesary.
+            /// Always bridge through naitve token first if necessary. 
             let path: Array<ContractAddress> = if token_in != native_token && token_out != native_token {
                 array![token_in, native_token, token_out]
             } else {
@@ -1479,10 +1480,10 @@ mod Altair {
             let token = IERC20Dispatcher { contract_address: token_in };
 
             /// Get current allowance for token of router -> spender
-            let allowance = token.allowance(get_contract_address(), spender);
+            let allowance = IERC20Dispatcher { contract_address: token_in }.allowance(get_contract_address(), spender);
 
             /// If more allowance than needed escape
-            if allowance >= amount.into() {
+            if allowance >= amount {
                 return;
             }
 
@@ -1575,4 +1576,3 @@ mod Altair {
         }
     }
 }
-
