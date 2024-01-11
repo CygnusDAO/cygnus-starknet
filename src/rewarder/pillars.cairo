@@ -565,7 +565,9 @@ mod PillarsOfCreation {
         /// The timestamp of when we advanced an epoch}
         last_epoch_time: u64,
         /// Doomswitch
-        doom_switch: bool
+        doom_switch: bool,
+        /// Stored epoch (see version 2.0.0 in EVM github)
+        current_epoch: u128
     }
 
     /// Scale
@@ -762,15 +764,7 @@ mod PillarsOfCreation {
         /// # Implementation
         /// * IPillarsOfCreation
         fn get_current_epoch(self: @ContractState) -> u128 {
-            // Get the current timestamp
-            let timestamp = get_block_timestamp();
-
-            /// Contract has expired
-            if timestamp >= self.death.read() {
-                return TOTAL_EPOCHS;
-            }
-
-            ((timestamp - self.birth.read()) / BLOCKS_PER_EPOCH).into()
+            self.current_epoch.read()
         }
 
         /// # Implementation
@@ -1122,6 +1116,12 @@ mod PillarsOfCreation {
                 shuttle_id += 1;
             };
 
+            /// Update the epoch's total claimed variable
+            let current_epoch = self.get_current_epoch();
+            let mut epoch = self.epoch_info.read(self.get_current_epoch());
+            epoch.total_claimed += amount;
+            self.epoch_info.write(current_epoch, epoch);
+
             /// # Event
             /// * `CollectAll`
             let caller = get_caller_address();
@@ -1140,6 +1140,12 @@ mod PillarsOfCreation {
 
             /// Collect CYG internally
             let amount = self._collect_cyg(borrowable, collateral, to);
+
+            /// Update the epoch's total claimed variable
+            let current_epoch = self.get_current_epoch();
+            let mut epoch = self.epoch_info.read(self.get_current_epoch());
+            epoch.total_claimed += amount;
+            self.epoch_info.write(current_epoch, epoch);
 
             /// # Event
             /// * `Collect`
@@ -1322,11 +1328,22 @@ mod PillarsOfCreation {
             self.emit(TrackRewards { borrowable, account, balance, collateral });
         }
 
+        /// This function serves no purpose, advance will self-destruct it anyways. 
+        ///
         /// # Implementation
         /// * IPillarsOfCreation
         fn supernova(ref self: ContractState) {
             /// Tries to advance epoch and updates all shuttles
             self._accelerate_the_universe();
+
+            /// Currente epoch
+            let epoch = self.get_current_epoch();
+
+            /// Escape
+            if epoch < TOTAL_EPOCHS {
+                return;
+            }
+
             /// Try to self-destruct
             self._supernova();
         }
@@ -1472,13 +1489,6 @@ mod PillarsOfCreation {
 
             /// TODO Bonus rewards
 
-            /// 4. Make sure we have not passed this epochs total claimable and 
-            ///    update the epoch's total claimed variable
-            let current_epoch = self.get_current_epoch();
-            let mut epoch = self.epoch_info.read(current_epoch);
-            epoch.total_claimed += cyg_amount;
-            self.epoch_info.write(current_epoch, epoch);
-
             /// 5. Mint CYG to `to`
             self.cyg_token.read().mint(to, cyg_amount);
 
@@ -1566,8 +1576,8 @@ mod PillarsOfCreation {
 
             /// 1. Check if we have passed epoch blocks
             if blocks_this_epoch >= BLOCKS_PER_EPOCH {
-                /// Calculate the new epoch
-                let new_epoch = self.get_current_epoch();
+                /// Calculate the new epoch, gas savings
+                let new_epoch = self.get_current_epoch() + 1;
 
                 /// 2. Check if we have passed death
                 if new_epoch < TOTAL_EPOCHS {
@@ -1589,7 +1599,7 @@ mod PillarsOfCreation {
                     let new_cyg_per_block_dao = self.calculate_cyg_per_block(new_epoch, total_cyg);
                     self.cyg_per_block_dao.write(new_cyg_per_block_dao);
 
-                    /// 6. Create a new epoch and add to storage with
+                    /// 6. Create a new epoch
                     let epoch_info = EpochInfo {
                         epoch: new_epoch.try_into().unwrap(),
                         cyg_per_block: new_cyg_per_block,
@@ -1598,7 +1608,12 @@ mod PillarsOfCreation {
                         start: timestamp,
                         end: timestamp + BLOCKS_PER_EPOCH
                     };
+
+                    /// Add to storage
                     self.epoch_info.write(new_epoch, epoch_info);
+
+                    /// Update epoch internally
+                    self.current_epoch.write(new_epoch);
 
                     /// # Event
                     /// * `NewEpoch`
@@ -1613,18 +1628,15 @@ mod PillarsOfCreation {
 
         /// Emits supernova event when we reach the end of this contracts life
         fn _supernova(ref self: ContractState) {
-            /// Check that we have passed total epochs
-            if (self.get_current_epoch() < TOTAL_EPOCHS) {
-                return;
-            }
-
             /// # Error
             /// * `not_doomed_yet` - Assert we are doomed, can only be set my admin once (ideally in the last epoch)
             assert(self.doom_switch.read(), 'not_doomed_yet');
 
             // Hail Satan ʕ•ᴥ•ʔ
-            // By now this contract would have minted exactly 5,000,000. Any mints after will be reverted by the
-            // CYG contract. Remove self-destruct as will be deprecated
+            // By now this contract would have minted exactly:
+            //     total_cyg_rewards + total_cyg_rewards_dao
+            //
+            // Any mints after will be reverted by the CYG contract.
             let timestamp = get_block_timestamp();
 
             /// # Event
@@ -1644,4 +1656,3 @@ mod PillarsOfCreation {
         }
     }
 }
-
