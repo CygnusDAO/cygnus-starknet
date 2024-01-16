@@ -9,6 +9,7 @@ use cygnus::orbiters::deneb::{IDenebDispatcher, IDenebDispatcherTrait};
 use cygnus::registry::registry::{INebulaRegistryDispatcher, INebulaRegistryDispatcherTrait};
 use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait};
 use cygnus::terminal::collateral::{ICollateralDispatcher, ICollateralDispatcherTrait};
+use cygnus::dao::dao_reserves::{ICygnusDAOReservesDispatcher, ICygnusDAOReservesDispatcherTrait};
 
 /// # Interface - Hangar18
 #[starknet::interface]
@@ -151,7 +152,7 @@ trait IHangar18<T> {
     ///
     /// # Arguments
     /// * `new_dao_reserves` - The address of the new DAO reserves
-    fn set_dao_reserves(ref self: T, new_dao_reserves: ContractAddress);
+    fn set_dao_reserves(ref self: T, new_dao_reserves: ICygnusDAOReservesDispatcher);
 }
 
 /// # Module - Hangar18
@@ -168,6 +169,7 @@ mod Hangar18 {
     use cygnus::registry::registry::{INebulaRegistryDispatcher, INebulaRegistryDispatcherTrait};
     use cygnus::terminal::collateral::{ICollateralDispatcher, ICollateralDispatcherTrait};
     use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait};
+    use cygnus::dao::dao_reserves::{ICygnusDAOReservesDispatcher, ICygnusDAOReservesDispatcherTrait};
 
     /// # Libraries
     use starknet::{ContractAddress, get_caller_address, contract_address_const, get_contract_address, get_tx_info};
@@ -256,7 +258,7 @@ mod Hangar18 {
         /// The address of the oracle registry on Starknet
         oracle_registry: INebulaRegistryDispatcher,
         /// DAO Reserves
-        dao_reserves: ContractAddress,
+        dao_reserves: ICygnusDAOReservesDispatcher,
         /// The total number of orbiters initialized
         total_orbiters: u32,
         /// Total shuttles deployed
@@ -331,7 +333,7 @@ mod Hangar18 {
         /// # Implementation
         /// * IHangar18
         fn dao_reserves(self: @ContractState) -> ContractAddress {
-            self.dao_reserves.read()
+            self.dao_reserves.read().contract_address
         }
 
         /// # Implementation
@@ -587,7 +589,10 @@ mod Hangar18 {
             // Write shuttle to array
             self.all_shuttles.write(shuttle_id, shuttle);
 
-            // Increase unique id's
+            // Add shuttle to dao reserves contract
+            self.dao_reserves.read().add_shuttle(shuttle_id, borrowable, collateral);
+
+            // Increase unique shuttle id's
             self.total_shuttles.write(shuttle_id + 1);
 
             /// # Event
@@ -658,13 +663,13 @@ mod Hangar18 {
         ///
         /// # Implementation
         /// * IHangar18
-        fn set_dao_reserves(ref self: ContractState, new_dao_reserves: ContractAddress) {
+        fn set_dao_reserves(ref self: ContractState, new_dao_reserves: ICygnusDAOReservesDispatcher) {
             // Check sender is admin
             self.check_admin();
 
             /// # Error
             /// * `DAO_RESERVES_CANT_BE_ZERO` - Avoid setting the reserves as the zero address
-            assert(!new_dao_reserves.is_zero(), Errors::DAO_RESERVES_CANT_BE_ZERO);
+            assert(!new_dao_reserves.contract_address.is_zero(), Errors::DAO_RESERVES_CANT_BE_ZERO);
 
             /// DAO reserves until now
             let old_dao_reserves = self.dao_reserves.read();
@@ -674,7 +679,13 @@ mod Hangar18 {
 
             /// # Event
             ///  `NewDAOReserves`
-            self.emit(NewDAOReserves { old_dao_reserves, new_dao_reserves });
+            self
+                .emit(
+                    NewDAOReserves {
+                        old_dao_reserves: old_dao_reserves.contract_address,
+                        new_dao_reserves: new_dao_reserves.contract_address
+                    }
+                );
         }
     }
 

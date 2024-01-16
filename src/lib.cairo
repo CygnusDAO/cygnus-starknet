@@ -97,10 +97,12 @@ mod voids {
 
 mod periphery {
     mod altair;
-    mod altair_x;
     mod errors;
     mod integrations {
         mod jediswap_router;
     }
 }
 
+mod dao {
+    mod dao_reserves;
+}

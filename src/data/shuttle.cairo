@@ -12,3 +12,10 @@ struct Shuttle {
     orbiter_id: u32
 }
 
+/// DAOReserves struct
+#[derive(Drop, starknet::Store, Serde)]
+struct ShuttleDAOReserves {
+    shuttle_id: u32,
+    borrowable: IBorrowableDispatcher,
+    collateral: ICollateralDispatcher,
+}

@@ -558,7 +558,9 @@ mod Altair {
         /// 5. Leverage        - Borrows USDC from the borrowable and converts all USDC into LP and deposits back in Cygnus
         /// 6. Deleverage      - Burn LP collateral and convert into USDC and repay a loan (if any) and receive leftover USDC
 
-        /// 1. BORROW -------------------------------------------------
+        /// ---------------------------------------------------------------------------------------------------
+        ///                                         1. BORROW
+        /// ---------------------------------------------------------------------------------------------------
 
         /// # Implementation
         /// * IAltair
@@ -579,7 +581,9 @@ mod Altair {
             borrowable.borrow(get_caller_address(), recipient, borrow_amount, Default::default());
         }
 
-        /// 2. REPAY -------------------------------------------------
+        /// ---------------------------------------------------------------------------------------------------
+        ///                                         2. REPAY
+        /// ---------------------------------------------------------------------------------------------------
 
         /// # Implementation
         /// * IAltair
@@ -607,7 +611,9 @@ mod Altair {
             borrowable.borrow(borrower, Zeroable::zero(), 0, Default::default());
         }
 
-        /// 3. LIQUIDATE -------------------------------------------------
+        /// ---------------------------------------------------------------------------------------------------
+        ///                                         3. LIQUIDATE
+        /// ---------------------------------------------------------------------------------------------------
 
         /// # Implementation
         /// * IAltair
@@ -638,7 +644,9 @@ mod Altair {
             (amount, seize_tokens)
         }
 
-        /// 4. LEVERAGE -------------------------------------------------
+        /// ---------------------------------------------------------------------------------------------------
+        ///                                         4. LEVERAGE
+        /// ---------------------------------------------------------------------------------------------------
 
         /// # Implementation
         /// * IAltair
@@ -692,7 +700,9 @@ mod Altair {
             self._mint_lp_and_deposit(borrow_amount, calldata)
         }
 
-        /// 5. DELEVERAGE -------------------------------------------------
+        /// ---------------------------------------------------------------------------------------------------
+        ///                                         5. DELEVERAGE
+        /// ---------------------------------------------------------------------------------------------------
 
         /// # Returns
         /// * The amount of LP minted
@@ -760,7 +770,9 @@ mod Altair {
             self._remove_lp_and_repay(redeem_amount, calldata)
         }
 
-        /// 6. FLASH LIQUIDATE -------------------------------------------------
+        /// ---------------------------------------------------------------------------------------------------
+        ///                                         6. FLASH LIQUIDATE
+        /// ---------------------------------------------------------------------------------------------------
 
         /// TODO
         /// # Implementation
@@ -827,56 +839,6 @@ mod Altair {
             /// is expecting an equivalent amount of the LP redeemed in CygLP, transfer from borrower to collateral
             /// and burn the CygLP.
             self._flash_liquidate(cyg_lp_amount, repay_amount, calldata)
-        }
-
-        /// ──────── Admin ──────── 
-
-        /// # Implementation
-        /// * IAltair
-        fn set_altair_extension(ref self: ContractState, shuttle_id: u32, extension: ContractAddress) {
-            /// Error
-            /// `CALLER_NOT_ADMIN`
-            assert(get_caller_address() == self.hangar18.read().admin(), Errors::CALLER_NOT_ADMIN);
-
-            /// Get shuttle from factory given `shuttle_id`
-            let shuttle: Shuttle = self.hangar18.read().all_shuttles(shuttle_id);
-
-            /// Error
-            /// `SHUTTLE_NOT_DEPLOYED`
-            assert(shuttle.deployed, Errors::SHUTTLE_NOT_DEPLOYED);
-
-            /// If this is a new extension we add to array and mark is_extension to true
-            if !self.is_extension.read(extension) {
-                /// Get total extensions length to get ID
-                let total_extensions = self.total_extensions.read();
-
-                /// Mark as true
-                self.is_extension.write(extension, true);
-
-                /// Set extension in `array` (Extension ID => Extension)
-                self.all_extensions.write(total_extensions, extension);
-
-                /// Update array length
-                self.total_extensions.write(total_extensions + 1);
-            }
-
-            /// Write extension to borrowable and collateral
-
-            /// For leveraging USDC into LP tokens
-            self.extensions.write(shuttle.borrowable.contract_address, extension);
-
-            /// For deleveraging LP Tokens into USDC
-            self.extensions.write(shuttle.collateral.contract_address, extension);
-
-            /// For getting the assets for a a given amount of shares:
-            ///
-            /// asset received = shares_burnt * asset_balance / vault_token_supply
-            ///
-            /// Calling `get_assets_for_shares(underlying, amount)` returns two arrays: `tokens` and 
-            /// `amounts`. The / extensions handle this logic since it differs per underlying Liquidity 
-            /// Token. For example, returning / assets by burning 1 LP in UniV2, or 1 BPT in a Balancer 
-            /// Weighted Pool, etc. Helpful when deleveraging liquidity tokens into USDC.
-            self.extensions.write(shuttle.collateral.underlying(), extension);
         }
 
         /// ---------------------------------------------------------------------------------------------------
@@ -1087,6 +1049,58 @@ mod Altair {
             };
 
             positions
+        }
+
+        /// ---------------------------------------------------------------------------------------------------
+        ///                                            ADMIN ONLY 👽
+        /// ---------------------------------------------------------------------------------------------------
+
+        /// # Implementation
+        /// * IAltair
+        fn set_altair_extension(ref self: ContractState, shuttle_id: u32, extension: ContractAddress) {
+            /// Error
+            /// `CALLER_NOT_ADMIN`
+            assert(get_caller_address() == self.hangar18.read().admin(), Errors::CALLER_NOT_ADMIN);
+
+            /// Get shuttle from factory given `shuttle_id`
+            let shuttle: Shuttle = self.hangar18.read().all_shuttles(shuttle_id);
+
+            /// Error
+            /// `SHUTTLE_NOT_DEPLOYED`
+            assert(shuttle.deployed, Errors::SHUTTLE_NOT_DEPLOYED);
+
+            /// If this is a new extension we add to array and mark is_extension to true
+            if !self.is_extension.read(extension) {
+                /// Get total extensions length to get ID
+                let total_extensions = self.total_extensions.read();
+
+                /// Mark as true
+                self.is_extension.write(extension, true);
+
+                /// Set extension in `array` (Extension ID => Extension)
+                self.all_extensions.write(total_extensions, extension);
+
+                /// Update array length
+                self.total_extensions.write(total_extensions + 1);
+            }
+
+            /// Write extension to borrowable and collateral
+
+            /// For leveraging USDC into LP tokens
+            self.extensions.write(shuttle.borrowable.contract_address, extension);
+
+            /// For deleveraging LP Tokens into USDC
+            self.extensions.write(shuttle.collateral.contract_address, extension);
+
+            /// For getting the assets for a a given amount of shares:
+            ///
+            /// asset received = shares_burnt * asset_balance / vault_token_supply
+            ///
+            /// Calling `get_assets_for_shares(underlying, amount)` returns two arrays: `tokens` and 
+            /// `amounts`. The / extensions handle this logic since it differs per underlying Liquidity 
+            /// Token. For example, returning / assets by burning 1 LP in UniV2, or 1 BPT in a Balancer 
+            /// Weighted Pool, etc. Helpful when deleveraging liquidity tokens into USDC.
+            self.extensions.write(shuttle.collateral.underlying(), extension);
         }
     }
 
@@ -1576,3 +1590,4 @@ mod Altair {
         }
     }
 }
+

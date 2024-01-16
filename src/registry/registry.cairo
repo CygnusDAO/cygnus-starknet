@@ -378,9 +378,7 @@ mod NebulaRegistry {
             let created_at: u64 = get_block_timestamp();
 
             // Create nebula
-            let nebula: Nebula = Nebula {
-                name, nebula_address, nebula_id, total_oracles: 0, created_at
-            };
+            let nebula: Nebula = Nebula { name, nebula_address, nebula_id, total_oracles: 0, created_at };
 
             // Store in `array`
             self.all_nebulas.write(nebula_id, nebula);
