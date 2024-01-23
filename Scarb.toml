@@ -34,7 +34,7 @@ sierra-replace-ids = true
 
 [dependencies]
 snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.13.0" }
-starknet = "2.4.0"
+starknet = "2.4.2"
 
 [tool.snforge]
 exit_first = true
