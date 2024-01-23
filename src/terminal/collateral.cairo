@@ -1268,10 +1268,10 @@ mod Collateral {
             self.debt_ratio.write(950000000000000000);
 
             /// 3% liquidation profit for liquidators
-            self.liq_incentive.write(1040000000000000000); // 1.04e18
+            self.liq_incentive.write(1030000000000000000); // 1.03e18 = 3%
 
             /// 1% Liquidation fee which the protocol keeps
-            self.liq_fee.write(10000000000000000); // 0.01e18
+            self.liq_fee.write(10000000000000000); // 0.01e18 = 1%
         }
     }
 

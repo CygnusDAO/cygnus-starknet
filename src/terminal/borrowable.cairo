@@ -356,6 +356,12 @@ trait IBorrowable<T> {
     /// * `lender` - The address of the lender
     fn track_lender(ref self: T, lender: ContractAddress);
 
+    /// Total position IDs
+    fn all_positions_length(self: @T) -> u32;
+
+    /// Get address of position ID
+    fn all_positions(self: @T, position_id: u32) -> ContractAddress;
+
     /// --------------------------------------------------------------------------------------------------------
     ///                                          5. BORROWABLE
     /// --------------------------------------------------------------------------------------------------------
@@ -596,6 +602,12 @@ mod Borrowable {
         zk_lend_market: IZKLendMarketDispatcher,
         /// ZK Lend USDC contract - Rebase token
         zk_lend_usdc: IERC20Dispatcher,
+        /// Borrow positions length
+        all_positions_length: u32,
+        /// Id to borrower
+        all_positions: LegacyMap<u32, ContractAddress>,
+        /// Mapping if borrower
+        is_borrower: LegacyMap<ContractAddress, bool>
     }
 
     /// The maximum possible base rate set by admin
@@ -795,7 +807,7 @@ mod Borrowable {
         /// * IBorrowable
         fn total_assets(self: @ContractState) -> u128 {
             /// When called externally we always simulate accrual.
-            self._total_assets(true)
+            self._total_assets(accrue: true)
         }
 
         /// # Implementation
@@ -1163,7 +1175,19 @@ mod Borrowable {
         /// * IBorrowable
         fn get_borrow_balance(self: @ContractState, borrower: ContractAddress) -> (u128, u128) {
             // Simulate accrue
-            self._borrow_balance(borrower, true)
+            self._borrow_balance(borrower, accrue: true)
+        }
+
+        /// # implementation
+        /// * iborrowable
+        fn all_positions_length(self: @ContractState) -> u32 {
+            self.all_positions_length.read()
+        }
+
+        /// # implementation
+        /// * iborrowable
+        fn all_positions(self: @ContractState, position_id: u32) -> ContractAddress {
+            self.all_positions.read(position_id)
         }
 
         /// # Implementation
@@ -1309,7 +1333,7 @@ mod Borrowable {
 
             /// ────────── 1. Get borrower's latest USD debt - `update` accrued interest before this call
             /// Latest borrow balance - We have already accured so its guaranteed to be the latest balance
-            let (_, borrow_balance) = self._borrow_balance(borrower, false);
+            let (_, borrow_balance) = self._borrow_balance(borrower, accrue: false);
 
             /// Make sure that the amount being repaid is never more than the borrower's borrow balance
             let max = if repay_amount > borrow_balance {
@@ -1410,6 +1434,7 @@ mod Borrowable {
             // Store the default borrow index as 1 and the current timestamp 
             self.borrow_index.write(1_000_000_000_000_000_000);
             self.last_accrual_timestamp.write(get_block_timestamp());
+            self.reserve_factor.write(200000000000000000); // 0.20e18 = 20%
 
             /// Initialize borrowable strategy, in this case we use zkLend
             self._initialize_void();
@@ -1599,7 +1624,7 @@ mod Borrowable {
             // We have already accrued interest since we use `lock_and_update`
             // in redeem, so pass false to avoid loading indicies again and save gas
             // assets = shares * balance / total supply
-            shares.full_mul_div(self._total_assets(false), supply)
+            shares.full_mul_div(self._total_assets(accrue: false), supply)
         }
 
         /// Convert USD assets to CygUSD shares - We have already accrued interest
@@ -1622,7 +1647,7 @@ mod Borrowable {
             // We have already accrued interest since we use `lock_and_update`
             // in deposit, so pass false to avoid loading indicies again and save gas
             // shares = assets * supply / balance
-            assets.full_mul_div(supply, self._total_assets(false))
+            assets.full_mul_div(supply, self._total_assets(accrue: false))
         }
 
         /// Syncs the `total_balance` variable with the currently deposited cash in the strategy.
@@ -1874,7 +1899,7 @@ mod Borrowable {
         ) -> u128 {
             // Load snapshot - We have already accrued since this function is only called
             // after `borrow()` or `liquidate()` which accrue beforehand
-            let (_, borrow_balance) = self._borrow_balance(borrower, false);
+            let (_, borrow_balance) = self._borrow_balance(borrower, accrue: false);
 
             // In case of flash loan or 0 return current borrow_balance
             if (borrow_amount == repay_amount) {
@@ -1905,6 +1930,9 @@ mod Borrowable {
                 /// Increase total pool borrows
                 let total_borrows = self.total_borrows.read() + increase_borrow_amount;
                 self.total_borrows.write(total_borrows);
+
+                /// Update position
+                self._update_position(borrower)
             } else {
                 /// Decrease borrower's borrow balance by repaid amount
                 let decrease_borrow_amount = repay_amount - borrow_amount;
@@ -1963,6 +1991,30 @@ mod Borrowable {
 
             /// Pass lender or borrower info to the rewarder
             pillars.track_rewards(account, balance, collateral);
+        }
+
+        /// Updates the total borrowers stored positions
+        ///
+        /// # Arguments
+        /// * `borrower` - The address of the borrower
+        fn _update_position(ref self: ContractState, borrower: ContractAddress) {
+            /// Check mapping to see if borrower has already been added
+            let is_borrower = self.is_borrower.read(borrower);
+
+            /// If not added then add and update `is_borrower`, all positions and total positions length
+            if (!is_borrower) {
+                /// Get the current position ID
+                let position_id = self.all_positions_length.read();
+
+                /// Borrower address cant be added again
+                self.is_borrower.write(borrower, true);
+
+                /// Update all positions mapping
+                self.all_positions.write(position_id, borrower);
+
+                /// Increase position ID
+                self.all_positions_length.write(position_id + 1);
+            }
         }
     }
 
