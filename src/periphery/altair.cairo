@@ -1,3 +1,5 @@
+//  SPDX-License-Identifier: AGPL-3.0-or-later
+//
 //  altair.cairo
 //
 //  Copyright (C) 2023 CygnusDAO
@@ -35,9 +37,7 @@
 
 // Libraries
 use starknet::ContractAddress;
-use cygnus::data::altair::{
-    ShuttleInfoC, ShuttleInfoB, BorrowerPosition, LenderPosition, SinglePosition, SinglePositionResult
-};
+use cygnus::data::altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition, LenderPosition};
 use cygnus::data::calldata::{LeverageCalldata, DeleverageCalldata, Aggregator};
 
 /// # Interface - Altair
@@ -172,15 +172,6 @@ trait IAltair<T> {
     /// # Returns
     /// * The cyg_usd balance, usdc balance and position in USD for all borrowables
     fn latest_lender_position_all(self: @T, lender: ContractAddress) -> (u128, u128, u128);
-
-    /// Positions for an array of borrowers
-    ///
-    /// # Arguments
-    /// * `borrowers` - Array of structs of single positions for borrowers { shuttle_id, borrower_address }
-    ///
-    /// # Returns
-    /// * Array of full borrowers positions
-    fn latest_cygnus_positions(self: @T, borrowers: Array<SinglePosition>) -> Array<SinglePositionResult>;
 
     /// -------------------------------------------------------------------------------------------------------
     ///                                      NON-CONSTANT FUNCTIONS
@@ -388,7 +379,7 @@ mod Altair {
     /// # Data
     use cygnus::data::{
         shuttle::{Shuttle}, calldata::{LeverageCalldata, DeleverageCalldata, Aggregator},
-        altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition, LenderPosition, SinglePosition, SinglePositionResult}
+        altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition, LenderPosition}
     };
 
     /// Aggregators
@@ -1032,58 +1023,6 @@ mod Altair {
             (shuttleC, shuttleB)
         }
 
-        /// # Implementation
-        /// * IAltair
-        fn latest_cygnus_positions(
-            self: @ContractState, borrowers: Array<SinglePosition>
-        ) -> Array<SinglePositionResult> {
-            /// Get borrower's array length
-            let total_borrowers = borrowers.len();
-
-            /// The return variable
-            let mut positions: Array<SinglePositionResult> = array![];
-
-            /// Escape
-            let mut length = 0;
-
-            /// Loop and get position for each borrower
-            loop {
-                /// Escape
-                if length == total_borrowers {
-                    break;
-                }
-
-                /// SinglePosition { shuttle_id, borrower }
-                let shuttle_id = *borrowers.at(length).shuttle_id;
-                let borrower = *borrowers.at(length).borrower;
-
-                /// Get the shuttle for shuttle_id from the hangar18 contract
-                let shuttle = self.hangar18.read().all_shuttles(shuttle_id);
-
-                /// LP Balance, position denominated in USD and health
-                let (position_lp, position_usd, health) = shuttle.collateral.get_borrower_position(borrower);
-                /// CygLP Balance
-                let cyg_lp_balance = shuttle.collateral.balance_of(borrower);
-                /// Borrow balance
-                let (_, borrow_balance) = shuttle.borrowable.get_borrow_balance(borrower);
-                /// The liquidation incentive for this collateral
-                let liquidation_incentive = shuttle.collateral.liquidation_incentive();
-
-                /// Add position to array
-                positions
-                    .append(
-                        SinglePositionResult {
-                            cyg_lp_balance, position_lp, position_usd, borrow_balance, health, liquidation_incentive
-                        }
-                    );
-
-                /// Increase acc
-                length += 1;
-            };
-
-            positions
-        }
-
         /// ---------------------------------------------------------------------------------------------------
         ///                                            ADMIN ONLY 👽
         /// ---------------------------------------------------------------------------------------------------
@@ -1623,3 +1562,4 @@ mod Altair {
         }
     }
 }
+

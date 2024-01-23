@@ -44,7 +44,7 @@ use cygnus::factory::hangar18::{IHangar18Dispatcher, IHangar18DispatcherTrait};
 /// # Data
 use cygnus::data::{
     shuttle::{Shuttle}, calldata::{LeverageCalldata, DeleverageCalldata, Aggregator},
-    altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition, LenderPosition, SinglePosition, SinglePositionResult}
+    altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition, LenderPosition, ShuttlePositions}
 };
 
 /// # Interface - Transmissions
@@ -114,16 +114,12 @@ trait ITransmissions<T> {
         self: @T, hangar18: IHangar18Dispatcher, lender: ContractAddress
     ) -> (u128, u128, u128);
 
-    /// Positions for an array of borrowers
-    ///
-    /// # Arguments
-    /// * `borrowers` - Array of structs of single positions for borrowers { shuttle_id, borrower_address }
-    ///
-    /// # Returns
-    /// * Array of full borrowers positions
-    fn latest_cygnus_positions(
-        self: @T, hangar18: IHangar18Dispatcher, borrowers: Array<SinglePosition>
-    ) -> Array<SinglePositionResult>;
+    /// Gets the shuttle's total borrowers addresses
+    fn get_shuttle_borrowers(self: @T, hangar18: IHangar18Dispatcher, shuttle_id: u32) -> Array<ContractAddress>;
+    fn get_shuttle_positions(self: @T, hangar18: IHangar18Dispatcher, shuttle_id: u32) -> Array<ShuttlePositions>;
+    fn get_shuttles_borrowers_positions(
+        self: @T, hangar18: IHangar18Dispatcher, shuttle_id: u32, borrowers: Array<ContractAddress>
+    ) -> Array<ShuttlePositions>;
 }
 
 /// # Module - Transmissions
@@ -147,7 +143,7 @@ mod Transmissions {
     /// # Data
     use cygnus::data::{
         shuttle::{Shuttle}, calldata::{LeverageCalldata, DeleverageCalldata, Aggregator},
-        altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition, LenderPosition, SinglePosition, SinglePositionResult}
+        altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition, LenderPosition, ShuttlePositions}
     };
 
 
@@ -336,51 +332,125 @@ mod Transmissions {
 
         /// # Implementation
         /// * ITransmissions
-        fn latest_cygnus_positions(
-            self: @ContractState, hangar18: IHangar18Dispatcher, borrowers: Array<SinglePosition>
-        ) -> Array<SinglePositionResult> {
-            /// Get borrower's array length
-            let total_borrowers = borrowers.len();
+        fn get_shuttle_borrowers(
+            self: @ContractState, hangar18: IHangar18Dispatcher, shuttle_id: u32
+        ) -> Array<ContractAddress> {
+            /// Get the shuttle for shuttle_id from the hangar18 contract
+            let shuttle = hangar18.all_shuttles(shuttle_id);
 
-            /// The return variable
-            let mut positions: Array<SinglePositionResult> = array![];
+            let borrowable = shuttle.borrowable;
+            let collateral = shuttle.collateral;
 
-            /// Escape
-            let mut length = 0;
+            /// Get the borrowable's total positions length
+            let all_positions_length = borrowable.all_positions_length();
 
-            /// Loop and get position for each borrower
+            /// Accumulator and return array struct
+            let mut len = 0;
+            let mut borrowers = array![];
+
             loop {
-                /// Escape
-                if length == total_borrowers {
+                /// Break clause
+                if len == all_positions_length {
                     break;
                 }
 
-                /// SinglePosition { shuttle_id, borrower }
-                let shuttle_id = *borrowers.at(length).shuttle_id;
-                let borrower = *borrowers.at(length).borrower;
+                /// Get the borrower's address
+                let borrower = borrowable.all_positions(len);
+                let (_, borrow_balance) = borrowable.get_borrow_balance(borrower);
+                if (borrow_balance.is_non_zero()) {
+                    borrowers.append(borrower);
+                }
 
-                /// Get the shuttle for shuttle_id from the hangar18 contract
-                let shuttle = hangar18.all_shuttles(shuttle_id);
+                len += 1;
+            };
 
-                /// LP Balance, position denominated in USD and health
-                let (position_lp, position_usd, health) = shuttle.collateral.get_borrower_position(borrower);
-                /// CygLP Balance
-                let cyg_lp_balance = shuttle.collateral.balance_of(borrower);
-                /// Borrow balance
-                let (_, borrow_balance) = shuttle.borrowable.get_borrow_balance(borrower);
-                /// The liquidation incentive for this collateral
-                let liquidation_incentive = shuttle.collateral.liquidation_incentive();
+            borrowers
+        }
 
-                /// Add position to array
+        /// # Implementation
+        /// * ITransmissions
+        fn get_shuttles_borrowers_positions(
+            self: @ContractState, hangar18: IHangar18Dispatcher, shuttle_id: u32, borrowers: Array<ContractAddress>
+        ) -> Array<ShuttlePositions> {
+            /// Get the shuttle for shuttle_id from the hangar18 contract
+            let shuttle = hangar18.all_shuttles(shuttle_id);
+            let borrowable = shuttle.borrowable;
+            let collateral = shuttle.collateral;
+
+            /// Get the borrowable's total positions length
+            let borrowers_length = borrowers.len();
+
+            /// Accumulator and return array struct
+            let mut len = 0;
+            let mut positions = array![];
+
+            loop {
+                /// Break clause
+                if (len == borrowers_length) {
+                    break;
+                }
+
+                /// Get borrower at index `len`
+                let borrower = *borrowers.at(len);
+
+                /// Get borrower's info from borrowable and collateral
+                let (_, borrow_balance) = borrowable.get_borrow_balance(borrower);
+                let (position_lp, position_usd, health) = collateral.get_borrower_position(borrower);
+                let cyg_lp_balance = collateral.balance_of(borrower);
+
+                /// Add to position array
                 positions
                     .append(
-                        SinglePositionResult {
-                            cyg_lp_balance, position_lp, position_usd, borrow_balance, health, liquidation_incentive
-                        }
+                        ShuttlePositions { borrower, cyg_lp_balance, position_lp, position_usd, borrow_balance, health }
                     );
 
-                /// Increase acc
-                length += 1;
+                len += 1;
+            };
+
+            positions
+        }
+
+        /// # Implementation
+        /// * ITransmissions
+        fn get_shuttle_positions(
+            self: @ContractState, hangar18: IHangar18Dispatcher, shuttle_id: u32
+        ) -> Array<ShuttlePositions> {
+            /// Get the shuttle for shuttle_id from the hangar18 contract
+            let shuttle = hangar18.all_shuttles(shuttle_id);
+            let borrowable = shuttle.borrowable;
+            let collateral = shuttle.collateral;
+
+            /// Get the borrowable's total positions length
+            let all_positions_length = borrowable.all_positions_length();
+
+            /// Accumulator and return array struct
+            let mut len = 0;
+            let mut positions = array![];
+
+            loop {
+                /// Break clause
+                if len == all_positions_length {
+                    break;
+                }
+
+                /// Get the borrower's address
+                let borrower = borrowable.all_positions(len);
+
+                /// Get borrower's info from borrowable and collateral
+                let (_, borrow_balance) = borrowable.get_borrow_balance(borrower);
+                let (position_lp, position_usd, health) = collateral.get_borrower_position(borrower);
+                let cyg_lp_balance = collateral.balance_of(borrower);
+
+                if (borrow_balance.is_non_zero()) {
+                    positions
+                        .append(
+                            ShuttlePositions {
+                                borrower, cyg_lp_balance, position_lp, position_usd, borrow_balance, health
+                            }
+                        );
+                }
+
+                len += 1;
             };
 
             positions
