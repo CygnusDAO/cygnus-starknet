@@ -149,7 +149,7 @@ mod CygnusDAO {
 
     /// # Events
     use cygnus::cyg::events::Events::{
-        Transfer, Approval, PillarsOfCreationSet, CygMainnetSet, InitializeTeleport, TeleportFromEthereum,
+        Transfer, Approval, PillarsOfCreationSet, CygMainnetSet, InitializeTeleport, TeleportToStarknet,
         TeleportToEthereum
     };
 
@@ -165,7 +165,7 @@ mod CygnusDAO {
         PillarsOfCreationSet: PillarsOfCreationSet,
         CygMainnetSet: CygMainnetSet,
         InitializeTeleport: InitializeTeleport,
-        TeleportFromEthereum: TeleportFromEthereum,
+        TeleportToStarknet: TeleportToStarknet,
         TeleportToEthereum: TeleportToEthereum,
     }
 
@@ -499,7 +499,7 @@ mod CygnusDAO {
 
         /// # Event
         /// * `TeleportFromEthereum`
-        self.emit(TeleportFromEthereum { recipient, amount });
+        self.emit(TeleportToStarknet { recipient, amount });
     }
 
     /// L1 Handler to handle teleports from Starknet to Ethereum Mainnet.
@@ -509,7 +509,7 @@ mod CygnusDAO {
     /// * `recipient` - The address of the receiver of CYG on Ethereum
     /// * `amount` - The amount bridged from Starknet to Ethereum
     #[l1_handler]
-    fn teleport_from_starknet(
+    fn teleport_to_ethereum(
         ref self: ContractState, from_address: felt252, t_t: felt252, recipient: ContractAddress, amount: u128
     ) {
         /// # Error

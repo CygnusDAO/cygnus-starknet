@@ -41,7 +41,7 @@ mod Events {
     }
 
     #[derive(Drop, starknet::Event)]
-    struct TeleportFromEthereum {
+    struct TeleportToStarknet {
         recipient: ContractAddress,
         amount: u128
     }
