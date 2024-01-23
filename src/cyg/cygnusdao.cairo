@@ -534,13 +534,6 @@ mod CygnusDAO {
 
     #[generate_trait]
     impl InternalImpl of InternalTrait {
-        /// Sanity checks for teleporting between Ethereum to Starknet
-        ///
-        /// # Arguments
-        /// * `from_address` - Address on Ethereum that sent the message
-        /// * `t_t` - Teleport
-        fn _check_l1_caller(ref self: ContractState, from_address: felt252, t_t: felt252) {}
-
         fn _increase_allowance(ref self: ContractState, spender: ContractAddress, added_value: u128) -> bool {
             let caller = get_caller_address();
             self._approve(caller, spender, self.allowances.read((caller, spender)) + added_value);
