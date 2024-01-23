@@ -193,7 +193,7 @@ mod CygnusDAOReserves {
     use cygnus::factory::hangar18::{IHangar18Dispatcher, IHangar18DispatcherTrait};
     use cygnus::token::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use cygnus::libraries::full_math_lib::FullMathLib::FixedPointMathLibTrait;
-    use cygnus::token::cyg::{ICygnusDAODispatcher, ICygnusDAODispatcherTrait};
+    use cygnus::cyg::cygnusdao::{ICygnusDAODispatcher, ICygnusDAODispatcherTrait};
 
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     2. EVENTS

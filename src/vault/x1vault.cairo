@@ -3,7 +3,7 @@ use array::ArrayTrait;
 use cygnus::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 use cygnus::data::x1vault::{UserInfo};
 
-/// Interface - Pillars Of Creation
+/// Interface - X1 Vault
 #[starknet::interface]
 trait IX1Vault<T> {
     /// ─────────────────────────────── CONSTANT FUNCTIONS ───────────────────────────────────

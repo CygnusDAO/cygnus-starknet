@@ -3,14 +3,12 @@
 mod token {
     mod erc20;
     mod univ2pair;
-    //mod sithpair;
-    mod cyg;
 }
 
-/// # Module 
-/// * `bridge` - The CYG bridge between mainnet and starknet
-mod bridge {
-    mod teleporter;
+mod cyg {
+    mod cygnusdao;
+    mod events;
+    mod errors;
 }
 
 /// # Module 
@@ -97,6 +95,8 @@ mod voids {
 
 mod periphery {
     mod altair;
+    mod altair_x;
+    mod transmissions;
     mod errors;
     mod integrations {
         mod jediswap_router;

@@ -54,17 +54,11 @@ struct LenderPosition {
 }
 
 #[derive(Drop, Serde)]
-struct SinglePosition {
-    shuttle_id: u32,
+struct ShuttlePositions {
     borrower: ContractAddress,
-}
-
-#[derive(Drop, Serde)]
-struct SinglePositionResult {
     cyg_lp_balance: u128,
     position_lp: u128,
     position_usd: u128,
     borrow_balance: u128,
     health: u128,
-    liquidation_incentive: u128,
 }

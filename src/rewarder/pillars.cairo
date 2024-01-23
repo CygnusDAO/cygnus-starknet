@@ -404,7 +404,7 @@ mod PillarsOfCreation {
     /// # Interfaces
     use super::IPillarsOfCreation;
     use cygnus::factory::hangar18::{IHangar18Dispatcher, IHangar18DispatcherTrait};
-    use cygnus::token::cyg::{ICygnusDAODispatcher, ICygnusDAODispatcherTrait};
+    use cygnus::cyg::cygnusdao::{ICygnusDAODispatcher, ICygnusDAODispatcherTrait};
     use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait};
 
     /// # Libraries
