@@ -1,52 +1,82 @@
-/// # Module
-/// * `token` - Standard tokens/interfaces and the CYG Token
-mod token {
-    mod erc20;
-    mod univ2pair;
-}
-
-mod cyg {
-    mod cygnusdao;
-    mod events;
-    mod errors;
-}
-
 /// # Module 
 /// * `terminal` - The core Cygnus contracts where users deposit liquidity/stablecoins
 mod terminal {
     mod borrowable;
     mod collateral;
     mod errors;
+    mod events;
+}
+
+/// # Module
+/// * `periphery` - The periphery contracts to interact with core
+mod periphery {
+    mod altair;
+    mod altair_x;
+    mod transmissions;
+    mod errors;
+    mod integrations {
+        mod jediswap_router;
+    }
 }
 
 /// # Module 
 /// * `orbiters` - The deployer contracts that deploy Cygnus Core (borrowable and collateral contracts)
-/// * `albireo` - The borrowable deployer
-/// * `deneb` - The collateral deployer
 mod orbiters {
     mod albireo;
     mod deneb;
 }
 
-/// # Module - factory - The factory contract that stores deployers and keeps a record of all shuttles deployed
-/// * `hangar18` - The Cygnus factory contract that uses orbiters to deploy shuttles
-/// * `errors` - Hangar18 errors
+/// # Module 
+/// * `factory` - The factory contract that stores deployers and keeps a record of all shuttles deployed
 mod factory {
     mod hangar18;
     mod errors;
+    mod events;
 }
 
+/// # Module
+/// * `dao` - The DAO reserves contract
+mod dao {
+    mod dao_reserves;
+    mod errors;
+    mod events;
+}
+
+/// # Module 
+/// * `registry` - The registry for all LP token oracles (balancer oracle, univ2, univ3, etc.)
+mod registry {
+    mod registry;
+    mod errors;
+    mod events;
+}
+
+/// # Module
+/// * `oracle` - The LP Token oracle (in this case jedi)
+mod oracle {
+    mod nebula;
+    mod pragma_interface;
+    mod errors;
+    mod events;
+}
+
+/// # Module
+/// * `cyg` - The CYG token
+mod cyg {
+    mod cygnusdao;
+    mod events;
+    mod errors;
+}
+
+/// # Module
+/// * `rewarder` - The CYG rewarder contract
 mod rewarder {
     mod pillars;
+    mod errors;
+    mod events;
 }
 
-/// # Module - data - Data structures of all Cygnus contracts
-/// * `orbiter` - Holds data of albireo/deneb orbiters deployed and added to the hangar18 contract
-/// * `shuttle` - Keeps track of shuttles deployed on the factory
-/// * `registry` - Data of ebulas (LP oracles) deplpoyed. Ideally 1 per dex or 1 per type of collateral (BPTs, LPs, etc.)
-/// * `interest` - Interest rate variables of each borrowable contract with base rate, slope, kink and kink multiplier.
-/// * `calldata` - Calldata used by the periphery contract to interact with core to leverage/deleverage/flash liquidate positions
-/// * `pillars` - Data used by the CYG rewarder contract to keep track of lenders, borrowers and epochs
+/// # Module 
+/// * `data` - Data structures for all contracts
 mod data {
     mod orbiter;
     mod shuttle;
@@ -65,44 +95,24 @@ mod data {
     mod nebula;
 }
 
-/// # Module - registry - The LP Oracle registry that keeps track of all LP oracles deployed by CygnusDAO
-/// * `registry` - The registry contract where the factory reports to to check for oracles before deploying shuttles
-/// * `errors` - Registry errors
-mod registry {
-    mod registry;
-    mod errors;
-}
-
-/// # Module - oracle - Nebulas (LP oracles) deployed
-/// * `nebula` - The nebula contract that handles the logic for pricing liquidity (BPTs, LPs, YAS positions, etc.)
-mod oracle {
-    mod nebula;
-    mod pragma_interface;
-}
-
-/// # Module - libraries - Libraries used by core and periphery contract
-/// * `full_math_lib` - Simple u128 math lib used by core/periphery contracts
-/// * `errors` - Math Library errors
+/// # Module
+/// * `libraries` - Libraries used by core and periphery contract
 mod libraries {
     mod full_math_lib;
     mod date_time_lib;
     mod errors;
 }
 
+/// # Module
+/// * `voids` - The interface of borrowable/collateral strategies
 mod voids {
     mod zklend;
 }
 
-mod periphery {
-    mod altair;
-    mod altair_x;
-    mod transmissions;
-    mod errors;
-    mod integrations {
-        mod jediswap_router;
-    }
-}
 
-mod dao {
-    mod dao_reserves;
+/// # Module
+/// * `token` - Standard tokens/interfaces
+mod token {
+    mod erc20;
+    mod univ2pair;
 }

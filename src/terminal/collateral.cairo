@@ -77,7 +77,6 @@
 /// * CygnusDAO
 use starknet::ContractAddress;
 use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait};
-use cygnus::data::calldata::{DeleverageCalldata};
 
 /// # Interface
 /// * `ICollateral`
@@ -362,7 +361,7 @@ trait ICollateral<T> {
     ///
     /// # Returns
     /// * The amount of USDC received (if any)
-    fn flash_redeem(ref self: T, redeemer: ContractAddress, redeem_amount: u128, calldata: DeleverageCalldata) -> u128;
+    fn flash_redeem(ref self: T, redeemer: ContractAddress, redeem_amount: u128, calldata: Array<felt252>) -> u128;
 }
 
 /// # Module
@@ -388,19 +387,16 @@ mod Collateral {
     /// # Errors
     use cygnus::terminal::errors::{CollateralErrors as Errors};
 
-    /// # Data
-    use cygnus::data::calldata::{DeleverageCalldata};
+    /// # Events
+    use cygnus::terminal::events::CollateralEvents::{
+        Transfer, Approval, SyncBalance, Deposit, Withdraw, NewDebtRatio, NewLiquidationIncentive, NewLiquidationFee,
+        Seize
+    };
 
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     2. EVENTS
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
-    /// # Events
-    /// * `Transfer` - Logs when CygLP is transferred
-    /// * `Approval` - Logs when user approves a spender to spend their CygLP
-    /// * `SyncBalance` - Logs when `total_balance` is synced with underlying's balance_of
-    /// * `Deposit` - Logs when a user deposits LP and receives CygLP
-    /// * `Withdraw` - Logs when a user redeems CygLP and receives LP
     #[event]
     #[derive(Drop, starknet::Event)]
     enum Event {
@@ -415,77 +411,6 @@ mod Collateral {
         Seize: Seize
     }
 
-    /// Transfer
-    #[derive(Drop, starknet::Event)]
-    struct Transfer {
-        from: ContractAddress,
-        to: ContractAddress,
-        value: u128
-    }
-
-    /// Approval
-    #[derive(Drop, starknet::Event)]
-    struct Approval {
-        owner: ContractAddress,
-        spender: ContractAddress,
-        value: u128
-    }
-
-    // SyncBalance
-    #[derive(Drop, starknet::Event)]
-    struct SyncBalance {
-        balance: u128
-    }
-
-    /// Deposit
-    #[derive(Drop, starknet::Event)]
-    struct Deposit {
-        caller: ContractAddress,
-        recipient: ContractAddress,
-        assets: u128,
-        shares: u128
-    }
-
-    /// Withdraw
-    #[derive(Drop, starknet::Event)]
-    struct Withdraw {
-        caller: ContractAddress,
-        recipient: ContractAddress,
-        owner: ContractAddress,
-        assets: u128,
-        shares: u128
-    }
-
-
-    /// NewLiquidationFee
-    #[derive(Drop, starknet::Event)]
-    struct NewLiquidationFee {
-        old_liq_fee: u128,
-        new_liq_fee: u128
-    }
-
-    /// NewLiqIncentive
-    #[derive(Drop, starknet::Event)]
-    struct NewLiquidationIncentive {
-        old_incentive: u128,
-        new_incentive: u128
-    }
-
-
-    /// NewDebtRatio
-    #[derive(Drop, starknet::Event)]
-    struct NewDebtRatio {
-        old_ratio: u128,
-        new_ratio: u128
-    }
-
-    /// Seize
-    #[derive(Drop, starknet::Event)]
-    struct Seize {
-        liquidator: ContractAddress,
-        borrower: ContractAddress,
-        cyg_lp_amount: u128
-    }
 
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     3. STORAGE
@@ -1169,7 +1094,7 @@ mod Collateral {
         /// # Implementation
         /// * ICollateral
         fn flash_redeem(
-            ref self: ContractState, redeemer: ContractAddress, redeem_amount: u128, calldata: DeleverageCalldata
+            ref self: ContractState, redeemer: ContractAddress, redeem_amount: u128, calldata: Array<felt252>
         ) -> u128 {
             /// Lock
             self._lock();
@@ -1180,9 +1105,6 @@ mod Collateral {
 
             /// The equivalent of the LP redeemed in CygLP shares, rounding up
             let shares = redeem_amount.full_mul_div_up(self.total_supply.read(), self.total_balance.read());
-
-            /// Get sender
-            let caller = get_caller_address();
 
             /// before withdraw hook (if any strategy is set)
             self._before_withdraw(redeem_amount);
@@ -1198,12 +1120,13 @@ mod Collateral {
             // with a staticCall before hand, it has no effect on the function itself. In case of deleveraging
             // (converting LP to USDC), the router would first call this function and flashRedeem the LP, sell the LP for USDC,
             // repay user loans (if any) and transfer back the equivalent of the LP redeemed in CygLP to this contract.
-            if !calldata.recipient.is_zero() {
-                /// Get the caller address, could be any contract that subscribes to the IAltairCall interface
-                let altair = IAltairDispatcher { contract_address: caller };
+            if calldata.len() > 0 {
+                /// Get sender
+                let caller = get_caller_address();
 
                 /// Pass calldata to router
-                usd_received = altair.altair_redeem_u91A(caller, redeem_amount, calldata);
+                usd_received = IAltairDispatcher { contract_address: caller }
+                    .altair_redeem_u91A(caller, redeem_amount, calldata);
             }
 
             /// Check our current balance of CygLP

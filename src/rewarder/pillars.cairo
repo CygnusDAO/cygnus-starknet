@@ -1,9 +1,40 @@
-use starknet::ContractAddress;
-use cygnus::data::registry::{Nebula};
-use cygnus::oracle::nebula::{ICygnusNebulaDispatcher, ICygnusNebulaDispatcherTrait};
-use array::ArrayTrait;
-use cygnus::data::pillars::{EpochInfo, UserInfo, ShuttleInfo};
-
+//  SPDX-License-Identifier: AGPL-3.0-or-later
+//
+//  pillars.cairo
+//
+//  Copyright (C) 2023 CygnusDAO
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU Affero General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU Affero General Public License for more details.
+//
+//  You should have received a copy of the GNU Affero General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//
+//  ═══════════════════════════════════════════════════════════════════════════════════════════════════════════  
+//  .              .            .               .      🛰️     .           .                .           .
+//         █████████           ---======*.                                                 .           ⠀
+//        ███░░░░░███                                               📡                🌔                      . 
+//       ███     ░░░  █████ ████  ███████ ████████   █████ ████  █████        ⠀
+//      ░███         ░░███ ░███  ███░░███░░███░░███ ░░███ ░███  ███░░      .     .⠀           .           .
+//      ░███          ░███ ░███ ░███ ░███ ░███ ░███  ░███ ░███ ░░█████       ⠀
+//      ░░███     ███ ░███ ░███ ░███ ░███ ░███ ░███  ░███ ░███  ░░░░███              .             .⠀
+//       ░░█████████  ░░███████ ░░███████ ████ █████ ░░████████ ██████     .----===.*  ⠀
+//        ░░░░░░░░░    ░░░░░███  ░░░░░███░░░░ ░░░░░   ░░░░░░░░ ░░░░░░            .                           .⠀
+//         🛰️          ███ ░███  ███ ░███                .                 .                 .⠀
+//      .             ░░██████  ░░██████                🛰️                             .                 .     
+//                     ░░░░░░    ░░░░░░      -------=========*         🛰️             .                     ⠀
+//         .                            .       .          .            .                        .             .⠀
+//      
+//      Pillars of Creation - https://cygnusdao.finance                                                          . 
+//  ═══════════════════════════════════════════════════════════════════════════════════════════════════════════ 
+//
 //  The only contract capable of minting the CYG token. The CYG token is divided between the DAO and lenders
 //  or borrowers of the Cygnus protocol.
 //  It is similar to a masterchef contract but the rewards are based on epochs. Each epoch the rewards get
@@ -33,6 +64,13 @@ use cygnus::data::pillars::{EpochInfo, UserInfo, ShuttleInfo};
 //                  00-10   11-20   21-30   31-42
 //                             epochs
 //
+
+use starknet::ContractAddress;
+use cygnus::data::registry::{Nebula};
+use cygnus::oracle::nebula::{ICygnusNebulaDispatcher, ICygnusNebulaDispatcherTrait};
+use array::ArrayTrait;
+use cygnus::data::pillars::{EpochInfo, UserInfo, ShuttleInfo};
+
 
 /// Interface - Pillars Of Creation
 #[starknet::interface]
@@ -206,14 +244,12 @@ trait IPillarsOfCreation<T> {
     /// # Arguments
     /// * `borrowable` - The address of a borrowable contract (CygUSD)
     /// * `collateral` - The address of a collateral contract (CygLP) - This is zero for lenders
-    /// * `astronaut` - The address of the borrower or lender
-    fn pending_cyg(
-        self: @T, borrowable: ContractAddress, collateral: ContractAddress, astronaut: ContractAddress
-    ) -> u128;
+    /// * `_user` - The address of the borrower or lender
+    fn pending_cyg(self: @T, borrowable: ContractAddress, collateral: ContractAddress, _user: ContractAddress) -> u128;
 
     /// # Arguments
-    /// * `astronaut` - The address of the borrower or lender
-    fn pending_cyg_all(self: @T, astronaut: ContractAddress) -> u128;
+    /// * `_user` - The address of the borrower or lender
+    fn pending_cyg_all(self: @T, _user: ContractAddress) -> u128;
 
     /// ------------- Used for quick reporting purposes, not used by the pillars itself -------------
 
@@ -408,14 +444,20 @@ mod PillarsOfCreation {
     use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait};
 
     /// # Libraries
-    use cygnus::libraries::full_math_lib::FullMathLib::FixedPointMathLibTrait;
-    use starknet::{get_contract_address, ContractAddress, get_caller_address, get_block_timestamp};
-
-    /// # Data
     use cygnus::data::pillars::{EpochInfo, UserInfo, ShuttleInfo};
     use cygnus::data::signed_integer::{i128::{i128, u128Intoi128}, integer_trait::{IntegerTrait}};
-
+    use cygnus::libraries::full_math_lib::FullMathLib::FixedPointMathLibTrait;
     use cygnus::libraries::date_time_lib::{timestamp_to_date, date_to_timestamp, diff_days};
+    use starknet::{get_contract_address, ContractAddress, get_caller_address, get_block_timestamp};
+
+    /// # Errors
+    use cygnus::rewarder::errors::Errors;
+
+    /// # Events
+    use cygnus::rewarder::events::Events::{
+        DoomSwitch, NewEpoch, DAODrip, AccelerateTheUniverse, Collect, CollectAll, UpdateShuttle, TrackRewards,
+        Supernova, NewBorrowRewards, NewLendRewards
+    };
 
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     2. EVENTS
@@ -435,94 +477,6 @@ mod PillarsOfCreation {
         NewBorrowRewards: NewBorrowRewards,
         NewLendRewards: NewLendRewards,
         DoomSwitch: DoomSwitch
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct DoomSwitch {
-        timestamp: u64,
-        caller: ContractAddress
-    }
-
-
-    #[derive(Drop, starknet::Event)]
-    struct Supernova {
-        timestamp: u64
-    }
-
-    /// NewEpoch
-    #[derive(Drop, starknet::Event)]
-    struct NewEpoch {
-        old_epoch: u128,
-        new_epoch: u128,
-        old_cyg_per_block: u128,
-        new_cyg_per_block: u128
-    }
-
-    /// DAODrip
-    #[derive(Drop, starknet::Event)]
-    struct DAODrip {
-        dao_reserves: ContractAddress,
-        amount: u128
-    }
-
-    /// AccelerateTheUniverse
-    #[derive(Drop, starknet::Event)]
-    struct AccelerateTheUniverse {
-        shuttles_length: u32
-    }
-
-    /// UpdateShuttle
-    #[derive(Drop, starknet::Event)]
-    struct UpdateShuttle {
-        borrowable: ContractAddress,
-        collateral: ContractAddress,
-        caller: ContractAddress,
-        current_epoch: u128,
-        timestamp: u64
-    }
-
-    /// Collect
-    #[derive(Drop, starknet::Event)]
-    struct Collect {
-        borrowable: ContractAddress,
-        collateral: ContractAddress,
-        caller: ContractAddress,
-        to: ContractAddress,
-        amount: u128
-    }
-
-    /// CollectAll
-    #[derive(Drop, starknet::Event)]
-    struct CollectAll {
-        shuttles_length: u32,
-        caller: ContractAddress,
-        amount: u128
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct TrackRewards {
-        borrowable: ContractAddress,
-        account: ContractAddress,
-        balance: u128,
-        collateral: ContractAddress
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct NewLendRewards {
-        shuttle_id: u32,
-        borrowable: ContractAddress,
-        collateral: ContractAddress,
-        total_alloc_point: u128,
-        alloc_point: u128
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct NewBorrowRewards {
-        shuttle_id: u32,
-        borrowable: ContractAddress,
-        collateral: ContractAddress,
-        total_alloc_point: u128,
-        alloc_point: u128
     }
 
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -572,18 +526,20 @@ mod PillarsOfCreation {
 
     /// Scale
     const ONE: u128 = 1_000000000_000000000;
-
     /// The accounting precision
     const ACC_PRECISION: u128 = 1_000000000_000000000; // 1e18
     /// Maximum cyg per block possible
     const MAX_CYG_PER_BLOCK: u128 = 470000000_000000000; // 0.47e18
     /// The percentage that rewards get reduced by each epoch
     const REDUCTION_FACTOR_PER_EPOCH: u128 = 10000000_000000000; // 1%, 0.01e18
-
+    /// The seconds per year  used to calculate the duration
     const SECONDS_PER_YEAR: u64 = 31_536_000;
-    const DURATION: u64 = 189_216_000; // SECONDS_PER_YEAR * 6 years
+    /// Duratio of the CYG emissions (6 years)
+    const DURATION: u64 = 189_216_000;
+    /// Total epochs, emissions reduce by reduction factory every epoch
     const TOTAL_EPOCHS: u128 = 156;
-    const BLOCKS_PER_EPOCH: u64 = 1_212_923; // Duration / TOTAL EPOCHS
+    /// Blocks per epoch
+    const BLOCKS_PER_EPOCH: u64 = 1_212_923;
 
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     4. CONSTRUCTOR
@@ -845,11 +801,11 @@ mod PillarsOfCreation {
         /// # Implementation
         /// * IPillarsOfCreation
         fn pending_cyg(
-            self: @ContractState, borrowable: ContractAddress, collateral: ContractAddress, astronaut: ContractAddress
+            self: @ContractState, borrowable: ContractAddress, collateral: ContractAddress, _user: ContractAddress
         ) -> u128 {
             /// Get the shuttle and user info given `borrowable` and `collateral`
             let shuttle: ShuttleInfo = self.shuttle_info.read((borrowable, collateral));
-            let user: UserInfo = self.user_info.read((borrowable, collateral, astronaut));
+            let user: UserInfo = self.user_info.read((borrowable, collateral, _user));
 
             /// Get this shuttle's total shares and rewards_per_share stored
             let total_shares = shuttle.total_shares;
@@ -883,7 +839,7 @@ mod PillarsOfCreation {
         ///
         /// # Implementation
         /// * IPillarsOfCreation
-        fn pending_cyg_all(self: @ContractState, astronaut: ContractAddress) -> u128 {
+        fn pending_cyg_all(self: @ContractState, _user: ContractAddress) -> u128 {
             /// Get total shuttles length to loop 
             let shuttles_length = self.all_shuttles_length.read();
 
@@ -898,7 +854,7 @@ mod PillarsOfCreation {
                     break;
                 }
                 let shuttle = self.all_shuttles.read(shuttle_id);
-                amount += self.pending_cyg(shuttle.borrowable, shuttle.collateral, astronaut);
+                amount += self.pending_cyg(shuttle.borrowable, shuttle.collateral, _user);
                 shuttle_id += 1;
             };
 
@@ -1171,6 +1127,53 @@ mod PillarsOfCreation {
 
         /// # Implementation
         /// * IPillarsOfCreation
+        fn track_rewards(
+            ref self: ContractState, account: ContractAddress, balance: u128, collateral: ContractAddress
+        ) {
+            /// Don't allow dao reserves to receive any rewards
+            let dao_reserves = self.hangar18.read().dao_reserves();
+            if account == dao_reserves || account == Zeroable::zero() {
+                return;
+            }
+
+            /// Caller is always borrowable as we track rewards from there
+            let borrowable = get_caller_address();
+
+            /// Load shuttle and user structs
+            let mut shuttle = self._update_shuttle(borrowable, collateral);
+            let mut user = self.user_info.read((borrowable, collateral, account));
+
+            /// For borrowers the new_shares is their principal (ie. originally borrow amount)
+            /// For lenders the new_shares is their deposited USDC amount
+            let new_shares = balance;
+
+            /// Calculate difference in reward debt for `account`
+            let diff_shares: i128 = new_shares.into() - user.shares.into();
+            let reward_per_share: i128 = shuttle.acc_reward_per_share.into();
+            let diff_reward_debt: i128 = (diff_shares * reward_per_share) / ACC_PRECISION.into();
+
+            /// Update user struct
+            user.shares = new_shares;
+            user.reward_debt = user.reward_debt + diff_reward_debt;
+            self.user_info.write((borrowable, collateral, account), user);
+
+            /// Update shuttle struct
+            shuttle.total_shares = (shuttle.total_shares.into() + diff_shares).try_into().unwrap();
+
+            self.shuttle_info.write((borrowable, collateral), shuttle);
+
+            /// TODO - Bonus rewards
+
+            /// # Event
+            /// * `TrackRewards`
+            self.emit(TrackRewards { borrowable, account, balance, collateral });
+        }
+
+        /// # Security
+        /// * Only-admin
+        ///
+        /// # Implementation
+        /// * IPillarsOfCreation
         fn adjust_shuttle_rewards(
             ref self: ContractState, borrowable: ContractAddress, collateral: ContractAddress, alloc_point: u128
         ) {
@@ -1183,8 +1186,8 @@ mod PillarsOfCreation {
             let mut shuttle = self.shuttle_info.read((borrowable, collateral));
 
             /// # Error
-            /// * `not_init`
-            assert(shuttle.active, 'not_init');
+            /// * `SHUTTLE_NOT_INITIALIZED` - Avoid if we never initialized
+            assert(shuttle.active, Errors::SHUTTLE_NOT_INITIALIZED);
 
             /// Adjust total alloc points in the contract
             let old_alloc = shuttle.alloc_point;
@@ -1197,6 +1200,9 @@ mod PillarsOfCreation {
             self.shuttle_info.write((borrowable, collateral), shuttle);
         }
 
+        /// # Security
+        /// * Only-admin
+        ///
         /// # Implementation
         /// * IPillarsOfCreation
         fn set_borrow_rewards(
@@ -1210,8 +1216,8 @@ mod PillarsOfCreation {
             let mut borrow_rewards = self.shuttle_info.read((borrowable, collateral));
 
             /// # Error
-            /// * `already_init`
-            assert(!borrow_rewards.active, 'already_init');
+            /// * `SHUTTLE_NOT_INITIALIZED`
+            assert(!borrow_rewards.active, Errors::SHUTTLE_NOT_INITIALIZED);
 
             /// Increase alloc point. Dont sub alloc as is not init.
             let total_alloc = self.total_alloc_point.read() + alloc_point;
@@ -1241,6 +1247,9 @@ mod PillarsOfCreation {
         }
 
 
+        /// # Security
+        /// * Only-admin
+        ///
         /// # Implementation
         /// * IPillarsOfCreation
         fn set_lending_rewards(ref self: ContractState, borrowable: ContractAddress, alloc_point: u128) {
@@ -1252,8 +1261,8 @@ mod PillarsOfCreation {
             let mut lender_rewards = self.shuttle_info.read((borrowable, Zeroable::zero()));
 
             /// # Error
-            /// * `already_init`
-            assert(!lender_rewards.active, 'already_init');
+            /// * `SHUTTLE_NOT_INITIALIZED`
+            assert(!lender_rewards.active, Errors::SHUTTLE_NOT_INITIALIZED);
 
             /// Increase alloc point. Dont sub alloc as is not init.
             let total_alloc = self.total_alloc_point.read() + alloc_point;
@@ -1282,72 +1291,9 @@ mod PillarsOfCreation {
             self.shuttle_info.write((borrowable, Zeroable::zero()), lender_rewards);
         }
 
-        /// # Implementation
-        /// * IPillarsOfCreation
-        fn track_rewards(
-            ref self: ContractState, account: ContractAddress, balance: u128, collateral: ContractAddress
-        ) {
-            /// Don't allow dao reserves to receive any rewards
-            let dao_reserves = self.hangar18.read().dao_reserves();
-            if account == dao_reserves || account == Zeroable::zero() {
-                return;
-            }
-
-            /// Caller is always borrowable as we track rewards from there
-            let borrowable = get_caller_address();
-
-            /// Load shuttle and user structs
-            let mut shuttle = self._update_shuttle(borrowable, collateral);
-            let mut user = self.user_info.read((borrowable, collateral, account));
-
-            /// For borrowers the new_shares is their principal (ie. originally borrow amount)
-            /// For lenders the new_shares is their deposited USDC amount
-            let new_shares = balance;
-
-            /// Calculate difference in reward debt for `account`
-            let diff_shares: i128 = new_shares.into() - user.shares.into();
-
-            let reward_per_share: i128 = shuttle.acc_reward_per_share.into();
-
-            let diff_reward_debt: i128 = (diff_shares * reward_per_share) / ACC_PRECISION.into();
-
-            /// Update user struct
-            user.shares = new_shares;
-            user.reward_debt = user.reward_debt + diff_reward_debt;
-            self.user_info.write((borrowable, collateral, account), user);
-
-            /// Update shuttle struct
-            shuttle.total_shares = (shuttle.total_shares.into() + diff_shares).try_into().unwrap();
-
-            self.shuttle_info.write((borrowable, collateral), shuttle);
-
-            /// TODO - Bonus rewards
-
-            /// # Event
-            /// * `TrackRewards`
-            self.emit(TrackRewards { borrowable, account, balance, collateral });
-        }
-
-        /// This function serves no purpose, advance will self-destruct it anyways. 
+        /// # Security
+        /// * Only-admin
         ///
-        /// # Implementation
-        /// * IPillarsOfCreation
-        fn supernova(ref self: ContractState) {
-            /// Tries to advance epoch and updates all shuttles
-            self._accelerate_the_universe();
-
-            /// Currente epoch
-            let epoch = self.get_current_epoch();
-
-            /// Escape
-            if epoch < TOTAL_EPOCHS {
-                return;
-            }
-
-            /// Try to self-destruct
-            self._supernova();
-        }
-
         /// # Implementation
         /// * IPillarsOfCreation
         fn initialize_pillars(ref self: ContractState) {
@@ -1356,7 +1302,7 @@ mod PillarsOfCreation {
 
             /// # Errors
             /// * `ALREADY_INITIALIZED` - Pillars can only be initialized once
-            assert(self.epoch_info.read(0).total_rewards == 0, 'already_initialized');
+            assert(self.epoch_info.read(0).total_rewards == 0, Errors::SHUTTLE_ALREADY_INITIALIZED);
 
             /// Calcualte the cyg per block for borrowers/lenders and the DAO at epoch `0`
             let cyg_per_block = self.calculate_cyg_per_block(0, self.total_cyg_rewards.read());
@@ -1364,8 +1310,8 @@ mod PillarsOfCreation {
 
             /// # Error
             /// * `cyg_per_block_too_high`
-            assert(cyg_per_block < MAX_CYG_PER_BLOCK, 'cyg_per_block_too_high');
-            assert(cyg_per_block_dao < MAX_CYG_PER_BLOCK, 'cyg_per_block_too_high');
+            assert(cyg_per_block < MAX_CYG_PER_BLOCK, Errors::CYG_PER_BLOCK_TOO_HIGH);
+            assert(cyg_per_block_dao < MAX_CYG_PER_BLOCK, Errors::CYG_PER_BLOCK_TOO_HIGH);
 
             /// Store per block rates
             self.cyg_per_block_rewards.write(cyg_per_block);
@@ -1396,6 +1342,9 @@ mod PillarsOfCreation {
             self.emit(NewEpoch { old_epoch, new_epoch, old_cyg_per_block, new_cyg_per_block });
         }
 
+        /// # Security
+        /// * Only-admin
+        ///
         /// # Implementation
         /// * IPillarsOfCreation
         fn set_doom_switch(ref self: ContractState) {
@@ -1415,6 +1364,26 @@ mod PillarsOfCreation {
             let timestamp = get_block_timestamp();
             let caller = get_caller_address();
             self.emit(DoomSwitch { timestamp, caller });
+        }
+
+        /// This function serves no purpose, advance will self-destruct it anyways. 
+        ///
+        /// # Implementation
+        /// * IPillarsOfCreation
+        fn supernova(ref self: ContractState) {
+            /// Tries to advance epoch and updates all shuttles
+            self._accelerate_the_universe();
+
+            /// Currente epoch
+            let epoch = self.get_current_epoch();
+
+            /// Escape
+            if epoch < TOTAL_EPOCHS {
+                return;
+            }
+
+            /// Try to self-destruct
+            self._supernova();
         }
     }
 
@@ -1629,8 +1598,8 @@ mod PillarsOfCreation {
         /// Emits supernova event when we reach the end of this contracts life
         fn _supernova(ref self: ContractState) {
             /// # Error
-            /// * `not_doomed_yet` - Assert we are doomed, can only be set my admin once (ideally in the last epoch)
-            assert(self.doom_switch.read(), 'not_doomed_yet');
+            /// * `DOOM_SWITCH_INACTIVE` - Assert we are doomed, can only be set my admin once (ideally in the last epoch)
+            assert(self.doom_switch.read(), Errors::DOOM_SWITCH_INACTIVE);
 
             // Hail Satan ʕ•ᴥ•ʔ
             // By now this contract would have minted exactly:
@@ -1652,7 +1621,7 @@ mod PillarsOfCreation {
 
             /// # Error
             /// * `ONLY_ADMIN` - Reverts if sender is not hangar18 admin 
-            assert(get_caller_address() == admin, 'only_admin')
+            assert(get_caller_address() == admin, Errors::ONLY_ADMIN)
         }
     }
 }

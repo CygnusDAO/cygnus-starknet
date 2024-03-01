@@ -7,7 +7,9 @@ use array::ArrayTrait;
 /// Interface - Oracle Registry
 #[starknet::interface]
 trait INebulaRegistry<T> {
-    /// ─────────────────────────────── CONSTANT FUNCTIONS ───────────────────────────────────
+    /// -------------------------------------------------------------------------------------------------------
+    ///                                        CONSTANT FUNCTIONS
+    /// -------------------------------------------------------------------------------------------------------
 
     /// # Returns
     /// * The address of the registry admin, only one that can initialize oracles
@@ -79,7 +81,9 @@ trait INebulaRegistry<T> {
     /// * The Nebula struct for this `nebula_id`
     fn all_nebulas(self: @T, nebula_id: u32) -> Nebula;
 
-    /// ───────────────────────────── NON-CONSTANT FUNCTIONS ─────────────────────────────────
+    /// -------------------------------------------------------------------------------------------------------
+    ///                                      NON-CONSTANT FUNCTIONS
+    /// -------------------------------------------------------------------------------------------------------
 
     /// Stores a new nebula logic in this registry and assigns it a unique ID.
     /// The nebula logic is basically an oracle that prices specific lp tokens such as 
@@ -141,13 +145,14 @@ mod NebulaRegistry {
 
     /// # Libraries
     use starknet::{get_contract_address, ContractAddress, get_caller_address, get_block_timestamp};
+    use cygnus::data::registry::{Nebula};
+    use cygnus::data::nebula::{LPInfo};
 
     /// # Errors
     use cygnus::registry::errors::RegistryErrors;
 
-    /// # Data
-    use cygnus::data::registry::{Nebula};
-    use cygnus::data::nebula::{LPInfo};
+    /// # Events
+    use cygnus::registry::events::Events::{NewPendingAdmin, NewNebula, NewAdmin, NewOracle};
 
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     2. EVENTS
@@ -165,40 +170,6 @@ mod NebulaRegistry {
         NewAdmin: NewAdmin,
         NewNebula: NewNebula,
         NewOracle: NewOracle
-    }
-
-    /// # Event
-    /// * `NewPendingAdmin`
-    #[derive(Drop, starknet::Event)]
-    struct NewPendingAdmin {
-        old_pending: ContractAddress,
-        new_pending: ContractAddress
-    }
-
-    /// # Event
-    /// * `NewAdmin`
-    #[derive(Drop, starknet::Event)]
-    struct NewAdmin {
-        old_admin: ContractAddress,
-        new_admin: ContractAddress
-    }
-
-    /// # Event
-    /// * `NewNebula`
-    #[derive(Drop, starknet::Event)]
-    struct NewNebula {
-        name: felt252,
-        nebula_id: u32,
-        nebula_address: ContractAddress,
-        created_at: u64
-    }
-
-    /// # Event
-    /// * `NewOracle`
-    #[derive(Drop, starknet::Event)]
-    struct NewOracle {
-        nebula_id: u32,
-        lp_token_pair: ContractAddress
     }
 
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -235,6 +206,10 @@ mod NebulaRegistry {
 
     #[abi(embed_v0)]
     impl RegistryImpl of INebulaRegistry<ContractState> {
+        /// ---------------------------------------------------------------------------------------------------
+        ///                                        CONSTANT FUNCTIONS
+        /// ---------------------------------------------------------------------------------------------------
+
         /// # Implementation
         /// * INebulaRegistry
         fn admin(self: @ContractState) -> ContractAddress {
@@ -309,7 +284,9 @@ mod NebulaRegistry {
             ICygnusNebulaDispatcher { contract_address: nebula }.lp_token_info(lp_token_pair)
         }
 
-        /// ───────────────────────────── NON-CONSTANT FUNCTIONS ─────────────────────────────────
+        /// ---------------------------------------------------------------------------------------------------
+        ///                                      NON-CONSTANT FUNCTIONS
+        /// ---------------------------------------------------------------------------------------------------
 
         /// # Implementation
         /// * INebulaRegistry

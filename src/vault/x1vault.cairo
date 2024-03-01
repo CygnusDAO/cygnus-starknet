@@ -6,7 +6,9 @@ use cygnus::data::x1vault::{UserInfo};
 /// Interface - X1 Vault
 #[starknet::interface]
 trait IX1Vault<T> {
-    /// ─────────────────────────────── CONSTANT FUNCTIONS ───────────────────────────────────
+    /// -------------------------------------------------------------------------------------------------------
+    ///                                        CONSTANT FUNCTIONS
+    /// -------------------------------------------------------------------------------------------------------
 
     /// # Returns
     /// * The name of the contract `Cygnus X1 Vault`
@@ -72,7 +74,9 @@ trait IX1Vault<T> {
     /// * The pending claimable reward for user of `reward_token`
     fn pending_reward(self: @T, user: ContractAddress, reward_token: ContractAddress) -> u256;
 
-    /// ─────────────────────────────── NON-CONSTANT FUNCTIONS ───────────────────────────────
+    /// -------------------------------------------------------------------------------------------------------
+    ///                                      NON-CONSTANT FUNCTIONS
+    /// -------------------------------------------------------------------------------------------------------
 
     /// Updates the reward_per_share for each token in the vault
     fn update_rewards_all(ref self: T);
@@ -131,9 +135,9 @@ trait IX1Vault<T> {
 
 #[starknet::contract]
 mod X1Vault {
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     1. IMPORTS
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     /// # Interfaces
     use super::IX1Vault;
@@ -142,15 +146,19 @@ mod X1Vault {
     use cygnus::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
     /// # Libraries
+    use cygnus::data::x1vault::{UserInfo};
     use cygnus::libraries::full_math_lib::FixedPointMathLib::FixedPointMathLibTrait;
     use starknet::{get_contract_address, ContractAddress, get_caller_address, get_block_timestamp};
 
-    /// # Data
-    use cygnus::data::x1vault::{UserInfo};
+    /// # Errors
+    use cygnus::vault::errors::Errors;
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// # Events
+    use cygnus::vault::events::Events::{ClaimReward, Deposit, Withdraw, SweepToken, NewRewardToken};
+
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     2. EVENTS
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -162,45 +170,9 @@ mod X1Vault {
         NewRewardToken: NewRewardToken
     }
 
-    /// ClaimReward
-    #[derive(Drop, starknet::Event)]
-    struct ClaimReward {
-        token: ContractAddress,
-        pending: u256
-    }
-
-    /// Deposit
-    #[derive(Drop, starknet::Event)]
-    struct Deposit {
-        caller: ContractAddress,
-        cyg_amount: u256
-    }
-
-    /// Withdraw
-    #[derive(Drop, starknet::Event)]
-    struct Withdraw {
-        caller: ContractAddress,
-        cyg_amount: u256
-    }
-
-    /// SweepToken
-    #[derive(Drop, starknet::Event)]
-    struct SweepToken {
-        caller: ContractAddress,
-        token: ContractAddress,
-        amount: u256
-    }
-
-    /// NewRewardToken
-    #[derive(Drop, starknet::Event)]
-    struct NewRewardToken {
-        token: ContractAddress
-    }
-
-
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     3. STORAGE
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     #[storage]
     struct Storage {
@@ -237,9 +209,9 @@ mod X1Vault {
     /// The maximum deposit fee set by admin
     const MAX_DEPOSIT_FEE: u256 = 50000000000000000; // 0.05e18 = 5%
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     4. CONSTRUCTOR
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     #[constructor]
     fn constructor(ref self: ContractState, hangar18: IHangar18Dispatcher, cyg_token: ICygnusDAODispatcher,) {
@@ -248,13 +220,15 @@ mod X1Vault {
         self.deposit_fee.write(5000000000000000) // Default deposit fee of 0.5%
     }
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     5. IMPLEMENTATION
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     #[external(v0)]
     impl X1Vault of IX1Vault<ContractState> {
-        /// ─────────────────────────────── CONSTANT FUNCTIONS ───────────────────────────────────
+        /// ---------------------------------------------------------------------------------------------------
+        ///                                        CONSTANT FUNCTIONS
+        /// ---------------------------------------------------------------------------------------------------
 
         /// # Implementation
         /// * IPillarsOfCreation
@@ -361,14 +335,16 @@ mod X1Vault {
             user_shares.full_mul_div(reward_per_share, ACC_PRECISION) - user.reward_debt
         }
 
-        /// ─────────────────────────────── NON-CONSTANT FUNCTIONS ───────────────────────────────
+        /// ---------------------------------------------------------------------------------------------------
+        ///                                      NON-CONSTANT FUNCTIONS
+        /// ---------------------------------------------------------------------------------------------------
 
         /// # Implementation
         /// * IPillarsOfCreation
         fn update_reward(ref self: ContractState, reward_token: ContractAddress) {
             /// # Error
             /// * not_reward_token
-            assert(self.is_reward_token.read(reward_token), 'not_reward_token');
+            assert(self.is_reward_token.read(reward_token), Errors::NOT_REWARD_TOKEN);
 
             /// Total staked CYG
             let total_cyg = self.cyg_staked_balance.read();
@@ -502,7 +478,7 @@ mod X1Vault {
 
             /// # Error
             /// * `withdrawing_too_much`
-            assert(cyg_amount <= previous_shares, 'withdrawing_too_much');
+            assert(cyg_amount <= previous_shares, Errors::AMOUNT_EXCEEDS_BALANCE);
 
             /// Update user shares
             let new_shares = previous_shares - cyg_amount;
@@ -584,7 +560,7 @@ mod X1Vault {
 
             /// # Error
             /// * `already-added`
-            assert(self.is_reward_token.read(token), 'token_not_added');
+            assert(self.is_reward_token.read(token), Errors::NOT_REWARD_TOKEN);
         }
 
         /// # Security
@@ -598,18 +574,18 @@ mod X1Vault {
 
             /// # Error
             /// * `already-added`
-            assert(!self.is_reward_token.read(token), 'already_added');
+            assert(!self.is_reward_token.read(token), Errors::NOT_REWARD_TOKEN);
 
             /// Get total reward tokens up to now (for the ID in array)
             let total_reward_tokens = self.total_reward_tokens.read();
 
             /// # Error
             /// * `vault_max_capacity`
-            assert(total_reward_tokens < MAX_REWARD_TOKENS, 'vault_max_capacity');
+            assert(total_reward_tokens < MAX_REWARD_TOKENS, Errors::EXCEEDS_MAX_TOKENS_ALLOWED);
 
             /// # Error
             /// * `cant_add_zero`
-            assert(!token.is_zero(), 'cant_add_zero');
+            assert(!token.is_zero(), Errors::TOKEN_IS_ZERO);
 
             /// Add to "array"
             self.all_reward_tokens.write(total_reward_tokens, token);
@@ -643,11 +619,11 @@ mod X1Vault {
 
             /// # Error
             /// * `cant_sweep_reward`
-            assert(!self.is_reward_token.read(token), 'cant_sweep_reward');
+            assert(!self.is_reward_token.read(token), Errors::CANT_SWEEP_REWARD_TOKEN);
 
             /// # Error
             /// * `cant_sweep_cyg`
-            assert(token != self.cyg_token.read().contract_address, 'cant_sweep_cyg');
+            assert(token != self.cyg_token.read().contract_address, Errors::CANT_SWEEP_CYG_TOKEN);
 
             /// Get vault balance of token
             let amount = if is_compatible {
@@ -670,9 +646,9 @@ mod X1Vault {
         }
     }
 
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     6. INTERNAL LOGIC
-    /// ══════════════════════════════════════════════════════════════════════════════════════
+    /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
     #[generate_trait]
     impl InternalImpl of InternalTrait {
@@ -681,7 +657,7 @@ mod X1Vault {
         /// # Arguments
         /// * `total_cyg` - The current total amount of staked CYG in the X1 Vault
         /// * `reward_token` - The address of the reward token we are updating
-        fn update_reward_internal(ref self: ContractState, total_cyg: u256, reward_token: ContractAddress) {
+        fn _update_reward(ref self: ContractState, total_cyg: u256, reward_token: ContractAddress) {
             /// Escape for internal loop
             // if !self.is_reward_token.read(reward_token) {
             //     return;
@@ -714,7 +690,7 @@ mod X1Vault {
         /// `token` - The address of the token to transfer
         /// `to` - The address that will receive `amount` of `rewardToken`
         /// `amount` - The amount to send to `to`
-        fn safe_token_transfer(ref self: ContractState, token: ContractAddress, to: ContractAddress, amount: u256) {
+        fn _safe_transfer(ref self: ContractState, token: ContractAddress, to: ContractAddress, amount: u256) {
             /// Get current and stored balance of `token`
             let token_balance = self.vault_balance(token);
             let last_reward_balance = self.last_reward_balance.read(token);
@@ -729,13 +705,13 @@ mod X1Vault {
 
         /// # Security
         /// * Checks that caller is admin
-        fn check_admin(self: @ContractState) {
+        fn _check_admin(self: @ContractState) {
             // Get admin address from the hangar18
             let admin = self.hangar18.read().admin();
 
             /// # Error
             /// * `ONLY_ADMIN` - Reverts if sender is not hangar18 admin 
-            assert(get_caller_address() == admin, 'only_admin')
+            assert(get_caller_address() == admin, Errors::ONLY_ADMIN)
         }
     }
 }

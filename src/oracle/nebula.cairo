@@ -76,13 +76,15 @@ mod CygnusNebula {
 
     /// # Libraries
     use cygnus::libraries::full_math_lib::FullMathLib::FixedPointMathLibTrait;
-
-    use integer::{u128_sqrt};
-    use cygnus::data::nebula::{LPInfo};
-
-    /// # Imports
+    use cygnus::data::nebula::{NebulaOracle, LPInfo};
     use starknet::{ContractAddress, get_caller_address, get_block_timestamp, contract_address_const};
-    use cygnus::data::nebula::{NebulaOracle};
+    use integer::{u128_sqrt};
+
+    /// # Errors
+    use cygnus::oracle::errors::Errors;
+
+    /// # Events
+    use cygnus::oracle::events::Events::{NewLPOracle};
 
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     2. EVENTS
@@ -96,18 +98,10 @@ mod CygnusNebula {
         NewLPOracle: NewLPOracle,
     }
 
-    /// # Event
-    /// * `NewLPOracle`
-    #[derive(Drop, starknet::Event)]
-    struct NewLPOracle {
-        lp_token_pair: ContractAddress
-    }
-
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     3. STORAGE
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
-    /// # Storage
     #[storage]
     struct Storage {
         name: felt252,
@@ -191,7 +185,7 @@ mod CygnusNebula {
 
             /// # Error
             /// * `LP_ORACLE_NOT_INITIALIZED`
-            assert(oracle.initialized, 'oracle_not_initialized');
+            assert(oracle.initialized, Errors::ORACLE_NOT_INITIALIZED);
 
             /// Get the price of token0 and token1 from the oracle struct
             let price0 = self._token_price(oracle.price_feed0);
@@ -228,7 +222,7 @@ mod CygnusNebula {
 
             /// # Error
             /// * `LP_ORACLE_NOT_INITIALIZED`
-            assert(oracle.initialized, 'oracle_not_initialized');
+            assert(oracle.initialized, Errors::ORACLE_NOT_INITIALIZED);
 
             /// Get the price of token0 and token1 from the oracle struct, 18 decimals
             let price0 = self._token_price(oracle.price_feed0);
@@ -269,7 +263,7 @@ mod CygnusNebula {
 
             /// # Error
             /// * `LP_ORACLE_NOT_INITIALIZED`
-            assert(oracle.initialized, 'oracle_not_initialized');
+            assert(oracle.initialized, Errors::ORACLE_NOT_INITIALIZED);
 
             oracle
         }
@@ -288,7 +282,7 @@ mod CygnusNebula {
 
             /// # Error
             /// * ALREADY_INIT - Revert if already initialized
-            assert(!lp_oracle.initialized, 'already_init');
+            assert(!lp_oracle.initialized, Errors::ORACLE_ALREADY_INITIALIZED);
 
             // Create dispatcher and unique oracle id
             let lp_token_pair = IUniswapV2PairDispatcher { contract_address: lp_token_pair };
@@ -355,7 +349,7 @@ mod CygnusNebula {
         /// Internal check to reverts if caller is not registry
         fn _check_registry(self: @ContractState) {
             let caller = get_caller_address();
-            assert(caller == self.nebula_registry.read().contract_address, 'wrong caller');
+            assert(caller == self.nebula_registry.read().contract_address, Errors::ONLY_NEBULA_REGISTRY);
         }
 
         /// Gets a token's price from pragma internally

@@ -1,9 +1,45 @@
-//! Periphery
+//  SPDX-License-Identifier: AGPL-3.0-or-later
+//
+//  altair_x.cairo
+//
+//  Copyright (C) 2023 CygnusDAO
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU Affero General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU Affero General Public License for more details.
+//
+//  You should have received a copy of the GNU Affero General Public License
+//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+//  ═══════════════════════════════════════════════════════════════════════════════════════════════════════════  
+//   .              .            .               .      🛰️     .           .                .           .
+//          █████████     🛰️      ---======*.                                                 .           ⠀
+//         ███░░░░░███                                               📡                🌔                      . 
+//        ███     ░░░  █████ ████  ███████ ████████   █████ ████  █████        ⠀
+//       ░███         ░░███ ░███  ███░░███░░███░░███ ░░███ ░███  ███░░      .     .⠀           .           .
+//       ░███          ░███ ░███ ░███ ░███ ░███ ░███  ░███ ░███ ░░█████       ⠀
+//       ░░███     ███ ░███ ░███ ░███ ░███ ░███ ░███  ░███ ░███  ░░░░███              .             .⠀
+//        ░░█████████  ░░███████ ░░███████ ████ █████ ░░████████ ██████     .----===*  ⠀
+//         ░░░░░░░░░    ░░░░░███  ░░░░░███░░░░ ░░░░░   ░░░░░░░░ ░░░░░░            .                           .⠀
+//                      ███ ░███  ███ ░███                .                 .                 .⠀
+//       .             ░░██████  ░░██████        🛰️                        🛰️             .                 .     
+//                      ░░░░░░    ░░░░░░      -------=========*                      .                     ⠀
+//          .                            .       .          .            .                        .             .⠀
+//       
+//       JEDISWAP LP - https://cygnusdao.finance                                                          .                     .
+//  ═══════════════════════════════════════════════════════════════════════════════════════════════════════════
 
 // Libraries
-use starknet::ContractAddress;
-use cygnus::data::altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition};
-use cygnus::data::calldata::{LeverageCalldata, DeleverageCalldata, Aggregator};
+use starknet::{ContractAddress, ClassHash};
+use cygnus::data::altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition, LenderPosition};
+use cygnus::data::calldata::{Aggregator};
+use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait};
 
 /// # Interface - Altair
 #[starknet::interface]
@@ -17,16 +53,16 @@ trait IAltairX<T> {
     fn name(self: @T) -> felt252;
 
     /// # Returns
-    /// * The version of this router
-    fn version(self: @T) -> felt252;
-
-    /// # Returns
     /// * The address of hangar18 on Starknet
     fn hangar18(self: @T) -> ContractAddress;
 
     /// # Returns
     /// * The address of the current admin, the pool/orbiter deployer
     fn admin(self: @T) -> ContractAddress;
+
+    /// # Returns
+    /// * The extension's class hash
+    fn class_hash(self: @T) -> ClassHash;
 
     /// # Returns
     /// * The address of USD
@@ -72,7 +108,7 @@ trait IAltairX<T> {
     ///
     /// # Returns
     /// * The amount of LP minted
-    fn altair_borrow_09E(ref self: T, sender: ContractAddress, borrow_amount: u128, calldata: LeverageCalldata) -> u128;
+    fn altair_borrow_09E(ref self: T, sender: ContractAddress, borrow_amount: u128, calldata: Array<felt252>) -> u128;
 
     /// Function that is called by the CygnusCollateral contract and decodes data to carry out the deleverage.
     /// Will only succeed if: Caller is collateral contract & collateral contract was called by router
@@ -84,9 +120,7 @@ trait IAltairX<T> {
     ///
     /// # Returns
     /// * The amount of USDC received from deleveraging LP
-    fn altair_redeem_u91A(
-        ref self: T, sender: ContractAddress, redeem_amount: u128, calldata: DeleverageCalldata
-    ) -> u128;
+    fn altair_redeem_u91A(ref self: T, sender: ContractAddress, redeem_amount: u128, calldata: Array<felt252>) -> u128;
 
     /// Function that is called by the CygnusBorrow contract to carry out the flash liqudiation.
     /// Will only succeed if: Caller is borrow contract & Borrow contract was called by router
@@ -100,11 +134,12 @@ trait IAltairX<T> {
     /// # Returns
     /// * The amount of LP minted
     fn altair_liquidate_f2x(
-        ref self: T, sender: ContractAddress, cyg_lp_amount: u128, repay_amount: u128, calldata: DeleverageCalldata
-    );
+        ref self: T, sender: ContractAddress, cyg_lp_amount: u128, repay_amount: u128, calldata: Array<felt252>
+    ) -> u128;
 }
 
-/// # Module - AltairX
+
+/// # Module - Altair
 #[starknet::contract]
 mod AltairX {
     /// -------------------------------------------------------------------------------------------------------
@@ -118,21 +153,22 @@ mod AltairX {
     use cygnus::token::univ2pair::{IUniswapV2PairDispatcher, IUniswapV2PairDispatcherTrait};
     use cygnus::terminal::collateral::{ICollateralDispatcher, ICollateralDispatcherTrait};
     use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait};
+    use cygnus::periphery::altair::{IAltairDispatcher, IAltairDispatcherTrait};
 
     /// # Libraries
     use cygnus::libraries::full_math_lib::FullMathLib::FixedPointMathLibTrait;
     use starknet::{
         ContractAddress, get_caller_address, get_contract_address, get_block_timestamp, contract_address_const,
-        call_contract_syscall
+        call_contract_syscall, ClassHash
     };
 
     /// # Errors
-    use cygnus::periphery::errors::AltairErrors as Errors;
+    use cygnus::periphery::errors::Errors;
 
     /// # Data
     use cygnus::data::{
-        shuttle::{Shuttle}, calldata::{LeverageCalldata, DeleverageCalldata, Aggregator},
-        altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition}
+        shuttle::{Shuttle}, calldata::{LeverageCalldata, DeleverageCalldata, LiquidateCalldata, Aggregator},
+        altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition, LenderPosition}
     };
 
     /// Aggregators
@@ -146,20 +182,16 @@ mod AltairX {
     struct Storage {
         /// Current admin, the only one capable of deploying pools
         admin: ContractAddress,
+        /// Our address to enforce delegate calls only
+        my_address: ContractAddress,
+        /// Class hash
+        class_hash: ClassHash,
         /// Pending Admin, the address of the new pending admin
         usd: IERC20Dispatcher,
         /// ie WETH
         native_token: IERC20Dispatcher,
         /// Factory
         hangar18: IHangar18Dispatcher,
-        /// Total extensions initialized
-        total_extensions: u32,
-        /// Extensions
-        extensions: LegacyMap<ContractAddress, ContractAddress>,
-        /// Array of extensions
-        all_extensions: LegacyMap<u32, ContractAddress>,
-        /// Mapping to check if extension exists
-        is_extension: LegacyMap<ContractAddress, bool>,
         /// Avnu
         avnu_exchange: ContractAddress,
         /// Fibrous
@@ -181,7 +213,12 @@ mod AltairX {
     /// -------------------------------------------------------------------------------------------------------
 
     #[constructor]
-    fn constructor(ref self: ContractState, hangar18: IHangar18Dispatcher) {
+    fn constructor(
+        ref self: ContractState, hangar18: IHangar18Dispatcher, altair: IAltairDispatcher, class_hash: ClassHash
+    ) {
+        /// Write class clash to storage
+        self.class_hash.write(class_hash);
+
         // Get native and usd from factory
         let native_token = IERC20Dispatcher { contract_address: hangar18.native_token() };
         let usd = IERC20Dispatcher { contract_address: hangar18.usd() };
@@ -191,23 +228,16 @@ mod AltairX {
         self.usd.write(usd);
         self.native_token.write(native_token);
 
-        /// AVNU ROUTER
-        self
-            .avnu_exchange
-            .write(contract_address_const::<0x4270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f>());
+        /// AVNU Router
+        self.avnu_exchange.write(altair.avnu_exchange());
 
-        /// FIBROUS ROUTER
-        self
-            .fibrous_router
-            .write(contract_address_const::<0x00f6f4CF62E3C010E0aC2451cC7807b5eEc19a40b0FaaCd00CCA3914280FDf5a>());
+        /// FIBROUS Router
+        self.fibrous_router.write(altair.fibrous_router());
 
-        let jediswap_router = IJediswapRouterDispatcher {
-            contract_address: contract_address_const::<
-                0x041fd22b238fa21cfcf5dd45a8548974d8263b3a531a60388411c5e230f97023
-            >()
-        };
+        /// Jediswap for emergency
+        self.jediswap_router.write(IJediswapRouterDispatcher { contract_address: altair.jediswap_router() });
 
-        self.jediswap_router.write(jediswap_router);
+        self.my_address.write(get_contract_address());
     }
 
     /// -------------------------------------------------------------------------------------------------------
@@ -215,17 +245,12 @@ mod AltairX {
     /// -------------------------------------------------------------------------------------------------------
 
     #[abi(embed_v0)]
-    impl AltairXImpl of IAltairX<ContractState> {
+    impl AltairImpl of IAltairX<ContractState> {
         /// # Implementation
         /// * IAltair
         fn name(self: @ContractState) -> felt252 {
-            'Cygnus: Altair Router'
-        }
-
-        /// # Implementation
-        /// * IAltair
-        fn version(self: @ContractState) -> felt252 {
-            '1.0.0'
+            /// This extension is for jediswap LPs only
+            'Altair Extension: Jediswap'
         }
 
         /// # Implementation
@@ -238,6 +263,12 @@ mod AltairX {
         /// * IAltair
         fn admin(self: @ContractState) -> ContractAddress {
             self.hangar18.read().admin()
+        }
+
+        /// # Implementation
+        /// * IAltair
+        fn class_hash(self: @ContractState) -> ClassHash {
+            self.class_hash.read()
         }
 
         /// # Implementation
@@ -292,20 +323,41 @@ mod AltairX {
             (amount0, amount1)
         }
 
-        /// LEVERAGE -------------------------------------------------
+        /// Start periphery functions:
+        ///
+        /// 1. Borrow          - Users can borrow and receive USDC as long as they have enough LP collateral.
+        /// 2. Repay           - Users can repay a loan by transfering USDC back to the borrowable and calling `borrow`
+        /// 3. Liquidate       - Repay a user's shortfall loan and receive the equivalent of the repaid + bonus in CygLP
+        /// 4. Flash Liquidate - Sells the shortfall collateral to the market and receive the equivalent + bonus in USDC
+        /// 5. Leverage        - Borrows USDC from the borrowable and converts all USDC into LP and deposits back in Cygnus
+        /// 6. Deleverage      - Burn LP collateral and convert into USDC and repay a loan (if any) and receive leftover USDC
 
+        /// ---------------------------------------------------------------------------------------------------
+        ///                                         4. LEVERAGE
+        /// ---------------------------------------------------------------------------------------------------
+
+        /// # Security
+        /// * Only-library-call
+        ///
         /// # Implementation
-        /// * IAltair
+        /// * IAltairX
         fn altair_borrow_09E(
-            ref self: ContractState, sender: ContractAddress, borrow_amount: u128, calldata: LeverageCalldata
+            ref self: ContractState, sender: ContractAddress, borrow_amount: u128, calldata: Array<felt252>
         ) -> u128 {
+            /// This function can only be called via library calls only
+            self._only_library_call();
+
             /// # Error
             /// * `WRONG_SENDER`
             assert(sender == get_contract_address(), Errors::SENDER_NOT_ROUTER);
 
+            /// Deserialize the leverage calldata
+            let mut borrow_data = calldata.span();
+            let calldata = Serde::<LeverageCalldata>::deserialize(ref borrow_data).unwrap();
+
             /// # Error TODO
-            /// * `NOT_BORROWABLE` - Avoid if caller is not borrowable
-            ///assert(get_caller_address() == calldata.borrowable, Errors::CALLER_NOT_BORROWABLE);
+            /// * `NOT_BORROWABLE` - Avoid if caller is not borrowable 
+            //assert(calldata.borrowable == get_caller_address(), Errors::CALLER_NOT_BORROWABLE);
 
             /// By now this contract has USDC that were flash borrowed from the collateral. Convert all USDC into
             /// more LP and deposit back in collateral, minting CygLP to the receiver. Borrowable contract does
@@ -313,18 +365,29 @@ mod AltairX {
             self._mint_lp_and_deposit(borrow_amount, calldata)
         }
 
+        /// ---------------------------------------------------------------------------------------------------
+        ///                                         5. DELEVERAGE
+        /// ---------------------------------------------------------------------------------------------------
+
         /// # Implementation
         /// * IAltair
         fn altair_redeem_u91A(
-            ref self: ContractState, sender: ContractAddress, redeem_amount: u128, calldata: DeleverageCalldata
+            ref self: ContractState, sender: ContractAddress, redeem_amount: u128, calldata: Array<felt252>
         ) -> u128 {
+            /// This function can only be called via library calls only
+            self._only_library_call();
+
             /// # Error
             /// * `WRONG_SENDER`
             assert(sender == get_contract_address(), Errors::SENDER_NOT_ROUTER);
 
+            /// Get leverage calldata
+            let mut redeem_data = calldata.span();
+            let calldata = Serde::<DeleverageCalldata>::deserialize(ref redeem_data).unwrap();
+
             /// # Error TODO
             /// * `NOT_COLLATERAL` - Avoid if caller is not collateral
-            ///assert(get_caller_address() == calldata.collateral, Errors::CALLER_NOT_COLLATERAL);
+            /// assert(get_caller_address() == calldata.collateral, Errors::CALLER_NOT_COLLATERAL);
 
             /// By now this contract has LPs that were flash redeemed from collateral. Burn the LP, receive
             /// token0 and token1 assets, convert to USDC, repay loan or part of the loan. Collateral contract
@@ -333,6 +396,10 @@ mod AltairX {
             self._remove_lp_and_repay(redeem_amount, calldata)
         }
 
+        /// ---------------------------------------------------------------------------------------------------
+        ///                                         6. FLASH LIQUIDATE
+        /// ---------------------------------------------------------------------------------------------------
+
         /// # Implementation
         /// * IAltair
         fn altair_liquidate_f2x(
@@ -340,15 +407,19 @@ mod AltairX {
             sender: ContractAddress,
             cyg_lp_amount: u128,
             repay_amount: u128,
-            calldata: DeleverageCalldata
-        ) {
+            calldata: Array<felt252>
+        ) -> u128 {
             /// # Error
             /// * `WRONG_SENDER`
             assert(sender == get_contract_address(), 'wrong_sender');
 
-            /// # Error TODO
+            /// Get liquidate calldata
+            let mut redeem_data = calldata.span();
+            let calldata = Serde::<LiquidateCalldata>::deserialize(ref redeem_data).unwrap();
+
+            /// # Error
             /// * `NOT_BORROWABLE` - Avoid if caller is not borrowable
-            ///assert(get_caller_address() == calldata.borrowable, 'not_borrowable');
+            assert(get_caller_address() == calldata.borrowable, 'not_borrowable');
 
             /// By now this contract has LPs that were flash redeemed from collateral. Burn the LP, receive
             /// token0 and token1 assets, convert to USDC, repay loan or part of the loan. Collateral contract
@@ -357,6 +428,10 @@ mod AltairX {
             self._flash_liquidate(cyg_lp_amount, repay_amount, calldata)
         }
     }
+
+    /// -------------------------------------------------------------------------------------------------------
+    ///     6. INTERNAL LOGIC
+    /// -------------------------------------------------------------------------------------------------------
 
     #[generate_trait]
     impl LeverageImpl of LeverageImplTrait {
@@ -388,12 +463,12 @@ mod AltairX {
             /// Deposit LP in cygnus and mint CygLP to recipient
             collateral.deposit(liquidity, calldata.recipient);
 
+            /// Check for dust to send to receiver
+            self._clean_dust(token0, token1, calldata.recipient);
+
             /// Return LP Minted - useful for static calls, simulate tx, etc. has no use otherwise
             liquidity
         }
-
-        /// Check for dust and send to LP recipient
-        /// self._clean_dust(token0, token1, left_over_bal0, left_over_bal1, calldata.recipient);
 
         /// Inner function to prepare the data to be sent to the aggregators to leverage, maximum 2 swaps.
         ///
@@ -413,32 +488,32 @@ mod AltairX {
             aggregator: Aggregator,
             swapdata: Array<Span<felt252>>
         ) -> u128 {
-            /// Fast quote
+            /// Fast jediswap quote
             let amount0 = borrow_amount / 2;
             let amount1 = borrow_amount - amount0;
 
             /// Get stored usdc contract
             let usd = self.usd.read().contract_address;
 
-            /// Actual amount0 does not matter as it's encoded in the swapdata, it's used for checking allowance
+            /// Convert borrowed usdc to token0 - In case of using AVNU/Fibrous amount0 does not matter
+            /// we just pass it for checking allowance and approving if necessary
             if token0 != usd {
                 self._swap_tokens_aggregator(usd, token0, amount0.into(), aggregator, *swapdata.at(0));
             }
 
-            /// Amount1 doesnt matter
+            /// Convert usdc to token1, same as above, amount1 does not matter for aggregators as the
+            /// amount is encoded in the calldata
             if token1 != usd {
                 self._swap_tokens_aggregator(usd, token1, amount1.into(), aggregator, *swapdata.at(1));
             }
-
-            /// Jediswap router to add liquidity to the pool
-            let jediswap_router = self.jediswap_router.read();
 
             /// Receiver of the LP minted is the router as we deposit into collateral after
             let receiver = get_contract_address();
             let bal0 = IERC20Dispatcher { contract_address: token0 }.balanceOf(receiver);
             let bal1 = IERC20Dispatcher { contract_address: token1 }.balanceOf(receiver);
 
-            /// Approve Jediswap router in token_in
+            /// Jediswap router to add liquidity to the pool
+            let jediswap_router = self.jediswap_router.read();
             self._approve_token(token0, jediswap_router.contract_address, bal0);
             self._approve_token(token1, jediswap_router.contract_address, bal1);
 
@@ -449,6 +524,7 @@ mod AltairX {
             liquidity.try_into().unwrap()
         }
     }
+
 
     #[generate_trait]
     impl DeleverageImpl of DeleverageImplTrait {
@@ -515,11 +591,11 @@ mod AltairX {
             /// Burn the LP and receive amount0 and amount1 of the underlying LP assets
             let (amount0, amount1) = lp_token.burn(get_contract_address());
 
-            /// Convert all to USDC - TODO CLEAN DUST?
-            self
-                ._convert_liquidity_to_usd(
-                    amount0, amount1, lp_token.token0(), lp_token.token1(), calldata.aggregator, calldata.swapdata
-                );
+            let token0 = lp_token.token0();
+            let token1 = lp_token.token1();
+
+            /// Convert all to USDC
+            self._convert_liquidity_to_usd(amount0, amount1, token0, token1, calldata.aggregator, calldata.swapdata);
 
             /// Check that the amount received of USDC after deleveraging is not below min.
             let usd = self.usd.read().contract_address;
@@ -535,6 +611,8 @@ mod AltairX {
             /// Transfer CygLP from the borrower to the collateral contract to perform burn
             let collateral = ICollateralDispatcher { contract_address: calldata.collateral };
             collateral.transfer_from(calldata.recipient, collateral.contract_address, calldata.cyg_lp_amount);
+
+            self._clean_dust(token0, token1, calldata.recipient);
 
             /// Return amount received of USDC, helpful when simulating txns, has no use in core itself
             usd_amount
@@ -581,9 +659,10 @@ mod AltairX {
             self._swap_tokens_aggregator(token1, usd.contract_address, amount1, aggregator, *swapdata.at(1));
         }
 
+        /// TODO
         fn _flash_liquidate(
-            ref self: ContractState, cyg_lp_amount: u128, repay_amount: u128, calldata: DeleverageCalldata
-        ) {
+            ref self: ContractState, cyg_lp_amount: u128, repay_amount: u128, calldata: LiquidateCalldata
+        ) -> u128 {
             /// Collateral contract that holds our seized CygLP
             let collateral = ICollateralDispatcher { contract_address: calldata.collateral };
 
@@ -617,7 +696,9 @@ mod AltairX {
             /// This is positive else we would've reverted by now. This is the liquidation incentive that is sent to the borrower
             /// for liquidating the position.
             usd.transfer(calldata.recipient, (usd_received - repay_amount).into());
-        /// TODO - Clean Dust?
+            /// TODO - Clean Dust?
+            /// TODO - return properly
+            10
         }
     }
 
@@ -636,12 +717,7 @@ mod AltairX {
             /// Get native token (ie. WETH)
             let native_token = self.native_token.read().contract_address;
 
-            /// Swap token_in to token_out
-            let receiver = get_contract_address();
-            let deadline = get_block_timestamp();
-
-            /// Always bridge through naitve token first if necessary. Checks if both token_in AND token_out are not 
-            /// native and adds extra path if necesary.
+            /// Always bridge through naitve token first if necessary. 
             let path: Array<ContractAddress> = if token_in != native_token && token_out != native_token {
                 array![token_in, native_token, token_out]
             } else {
@@ -651,8 +727,12 @@ mod AltairX {
             /// Approve router in token_in
             self._approve_token(token_in, self.jediswap_router.read().contract_address, amount_in);
 
-            /// Swap token_in to token_out
-            self.jediswap_router.read().swap_exact_tokens_for_tokens(amount_in, 0, path, receiver, deadline);
+            /// Swap token_in to token_out, min received doesn't matter as we check at the end of leverage/deleverage 
+            /// for min LP received (for leverage) or min USDC received (for deleverage)
+            self
+                .jediswap_router
+                .read()
+                .swap_exact_tokens_for_tokens(amount_in, 0, path, get_contract_address(), get_block_timestamp());
         }
 
         /// Performs the swap with Avnu's Exchange Router
@@ -729,6 +809,13 @@ mod AltairX {
 
     #[generate_trait]
     impl HelpersImpl of HelpersImplTrait {
+        /// Checks that the call is a delegate call only, reverts if not.
+        fn _only_library_call(self: @ContractState) {
+            /// # Error 
+            /// * `ONLY_DELEGATE_CALL` - Avoid if not called via delegate
+            assert(self.my_address.read() != get_contract_address(), 'ONLY DELEGATE CALL')
+        }
+
         /// Checks allowance for a token and a spender to prepare for a swap. Approve max if necessary
         ///
         /// # Arguments
@@ -740,10 +827,10 @@ mod AltairX {
             let token = IERC20Dispatcher { contract_address: token_in };
 
             /// Get current allowance for token of router -> spender
-            let allowance = token.allowance(get_contract_address(), spender);
+            let allowance = IERC20Dispatcher { contract_address: token_in }.allowance(get_contract_address(), spender);
 
             /// If more allowance than needed escape
-            if allowance >= amount.into() {
+            if allowance >= amount {
                 return;
             }
 
@@ -782,6 +869,31 @@ mod AltairX {
             assert(get_block_timestamp() <= deadline, Errors::TRANSACTION_EXPIRED);
         }
 
+        /// Use deadline control for certain borrow/swap actions
+        ///
+        /// # Arguments
+        /// * `deadline` - The maximum timestamp allowed for tx to succeed
+        #[inline(always)]
+        fn _clean_dust(
+            ref self: ContractState, token0: ContractAddress, token1: ContractAddress, recipient: ContractAddress
+        ) {
+            let balance = IERC20Dispatcher { contract_address: token0 }.balanceOf(get_contract_address());
+            if (balance > 0) {
+                IERC20Dispatcher { contract_address: token0 }.transfer(recipient, balance);
+            }
+
+            let balance = IERC20Dispatcher { contract_address: token1 }.balanceOf(get_contract_address());
+            if (balance > 0) {
+                IERC20Dispatcher { contract_address: token1 }.transfer(recipient, balance);
+            }
+
+            let usd = self.usd.read().contract_address;
+            let balance = IERC20Dispatcher { contract_address: usd }.balanceOf(get_contract_address());
+            if (balance > 0) {
+                IERC20Dispatcher { contract_address: usd }.transfer(recipient, balance);
+            }
+        }
+
         /// Helpful function to ensure that borrowers never repay more than their owed amount
         ///
         /// # Arguments
@@ -810,3 +922,4 @@ mod AltairX {
         }
     }
 }
+

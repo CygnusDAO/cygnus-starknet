@@ -378,11 +378,7 @@ trait IBorrowable<T> {
     /// * `borrow_amount` - The amount of stablecoins to borrow
     /// * `calldata` - Calldata passed for leverage/flash loans
     fn borrow(
-        ref self: T,
-        borrower: ContractAddress,
-        receiver: ContractAddress,
-        borrow_amount: u128,
-        calldata: LeverageCalldata
+        ref self: T, borrower: ContractAddress, receiver: ContractAddress, borrow_amount: u128, calldata: Array<felt252>
     ) -> u128;
 
     /// Main function to liquidate or flash liquidate a borrower.
@@ -397,11 +393,7 @@ trait IBorrowable<T> {
     /// * `repay_amount` - The USD amount being repaid
     /// * `calldata` - Calldata passed for flash liquidating
     fn liquidate(
-        ref self: T,
-        borrower: ContractAddress,
-        receiver: ContractAddress,
-        repay_amount: u128,
-        calldata: DeleverageCalldata
+        ref self: T, borrower: ContractAddress, receiver: ContractAddress, repay_amount: u128, calldata: Array<felt252>
     ) -> u128;
 }
 
@@ -431,6 +423,12 @@ mod Borrowable {
     /// # Errors
     use cygnus::terminal::errors::{BorrowableErrors as Errors};
 
+    /// # Events
+    use cygnus::terminal::events::BorrowableEvents::{
+        Transfer, Approval, SyncBalance, Deposit, Withdraw, NewReserveFactor, NewInterestRateModel,
+        NewPillarsOfCreation, AccrueInterest, Borrow, Liquidate
+    };
+
     /// # Strategy
     use cygnus::voids::zklend::{
         IZKLendMarketDispatcher, IZKLendMarketDispatcherTrait, IZKTokenDispatcher, IZKTokenDispatcherTrait
@@ -440,12 +438,6 @@ mod Borrowable {
     ///     2. EVENTS
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
 
-    /// # Events
-    /// * `Transfer` - Logs when token is transferred
-    /// * `Approval` - Logs when user approves a spender to spend their CygLP
-    /// * `Sync` - Logs when `total_balance` is synced with underlying's balance_of
-    /// * `Deposit` - Logs when a user deposits LP and receives CygLP
-    /// * `Withdraw` - Logs when a user redeems CygLP and receives LP
     #[event]
     #[derive(Drop, starknet::Event)]
     enum Event {
@@ -462,101 +454,6 @@ mod Borrowable {
         Liquidate: Liquidate
     }
 
-    /// Transfer
-    #[derive(Drop, starknet::Event)]
-    struct NewPillarsOfCreation {
-        old_pillars: IPillarsOfCreationDispatcher,
-        new_pillars: IPillarsOfCreationDispatcher,
-    }
-
-
-    /// Transfer
-    #[derive(Drop, starknet::Event)]
-    struct Transfer {
-        from: ContractAddress,
-        to: ContractAddress,
-        value: u128
-    }
-
-    /// Approval
-    #[derive(Drop, starknet::Event)]
-    struct Approval {
-        owner: ContractAddress,
-        spender: ContractAddress,
-        value: u128
-    }
-
-    // SyncBalance
-    #[derive(Drop, starknet::Event)]
-    struct SyncBalance {
-        balance: u128
-    }
-
-    /// Deposit
-    #[derive(Drop, starknet::Event)]
-    struct Deposit {
-        caller: ContractAddress,
-        recipient: ContractAddress,
-        assets: u128,
-        shares: u128
-    }
-
-    /// Withdraw
-    #[derive(Drop, starknet::Event)]
-    struct Withdraw {
-        caller: ContractAddress,
-        recipient: ContractAddress,
-        owner: ContractAddress,
-        assets: u128,
-        shares: u128
-    }
-
-    /// NewReserveFactor
-    #[derive(Drop, starknet::Event)]
-    struct NewReserveFactor {
-        old_reserve_factor: u128,
-        new_reserve_factor: u128
-    }
-
-    /// NewInterestRateModel
-    #[derive(Drop, starknet::Event)]
-    struct NewInterestRateModel {
-        base_rate: u128,
-        multiplier: u128,
-        kink_muliplier: u128,
-        kink: u128
-    }
-
-    /// AccrueInterest
-    #[derive(Drop, starknet::Event)]
-    struct AccrueInterest {
-        cash: u128,
-        borrows: u128,
-        interest: u128,
-        new_reserves: u128
-    }
-
-    /// Borrow
-    #[derive(Drop, starknet::Event)]
-    struct Borrow {
-        caller: ContractAddress,
-        borrower: ContractAddress,
-        receiver: ContractAddress,
-        borrow_amount: u128,
-        repay_amount: u128
-    }
-
-    /// Liquidate
-    #[derive(Drop, starknet::Event)]
-    struct Liquidate {
-        caller: ContractAddress,
-        borrower: ContractAddress,
-        receiver: ContractAddress,
-        cyg_lp_amount: u128,
-        max: u128,
-        amount_usd: u128
-    }
-
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     3. STORAGE
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -565,6 +462,7 @@ mod Borrowable {
     struct Storage {
         /// Non-reentrant guard
         guard: bool,
+        /// Decimals of the underlying, same as the vault's
         decimals: u8,
         /// Total supply of CygUSD
         total_supply: u128,
@@ -1231,7 +1129,7 @@ mod Borrowable {
             borrower: ContractAddress,
             receiver: ContractAddress,
             borrow_amount: u128,
-            calldata: LeverageCalldata,
+            calldata: Array<felt252>,
         ) -> u128 {
             /// Lock, accrue  and update
             self._lock_accrue_update();
@@ -1266,7 +1164,7 @@ mod Borrowable {
             /// itself.
 
             /// Pass data to caller if necessary
-            if !calldata.recipient.is_zero() {
+            if calldata.len() > 0 {
                 /// Get the caller address, should be any contract that subscribes to the IAltairCall interface
                 let altair = IAltairDispatcher { contract_address: caller };
 
@@ -1323,7 +1221,7 @@ mod Borrowable {
             borrower: ContractAddress,
             receiver: ContractAddress,
             repay_amount: u128,
-            calldata: DeleverageCalldata
+            calldata: Array<felt252>
         ) -> u128 {
             /// Lock, accrue  and update
             self._lock_accrue_update();
@@ -1353,7 +1251,7 @@ mod Borrowable {
             /// If the `receiver` was the router used to flash liquidate then we call the router 
             /// with the data passed, allowing the collateral to be sold to the market
             /// Pass data to caller if necessary
-            if !calldata.recipient.is_zero() {
+            if calldata.len() > 0 {
                 /// Get the caller address, should be any contract that subscribes to the IAltairCall interface
                 let altair = IAltairDispatcher { contract_address: caller };
 

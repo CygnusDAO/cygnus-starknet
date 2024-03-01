@@ -116,7 +116,9 @@ trait ITransmissions<T> {
 
     /// Gets the shuttle's total borrowers addresses
     fn get_shuttle_borrowers(self: @T, hangar18: IHangar18Dispatcher, shuttle_id: u32) -> Array<ContractAddress>;
+
     fn get_shuttle_positions(self: @T, hangar18: IHangar18Dispatcher, shuttle_id: u32) -> Array<ShuttlePositions>;
+
     fn get_shuttles_borrowers_positions(
         self: @T, hangar18: IHangar18Dispatcher, shuttle_id: u32, borrowers: Array<ContractAddress>
     ) -> Array<ShuttlePositions>;
@@ -204,7 +206,7 @@ mod Transmissions {
             self: @ContractState, hangar18: IHangar18Dispatcher, borrower: ContractAddress
         ) -> (u128, u128, u128) {
             /// Get length of shuttles deployed
-            let total_shuttles = hangar18.total_shuttles_deployed();
+            let total_shuttles = hangar18.shuttles_deployed();
 
             /// Accumulators
             let mut principal = 0;
@@ -255,7 +257,7 @@ mod Transmissions {
             self: @ContractState, hangar18: IHangar18Dispatcher, lender: ContractAddress
         ) -> (u128, u128, u128) {
             /// Get length of shuttles deployed
-            let total_shuttles = hangar18.total_shuttles_deployed();
+            let total_shuttles = hangar18.shuttles_deployed();
 
             /// Accumulators
             let mut cyg_usd_balance = 0;
@@ -438,10 +440,10 @@ mod Transmissions {
 
                 /// Get borrower's info from borrowable and collateral
                 let (_, borrow_balance) = borrowable.get_borrow_balance(borrower);
-                let (position_lp, position_usd, health) = collateral.get_borrower_position(borrower);
-                let cyg_lp_balance = collateral.balance_of(borrower);
 
                 if (borrow_balance.is_non_zero()) {
+                    let (position_lp, position_usd, health) = collateral.get_borrower_position(borrower);
+                    let cyg_lp_balance = collateral.balance_of(borrower);
                     positions
                         .append(
                             ShuttlePositions {

@@ -141,11 +141,7 @@ mod CygnusDAO {
     use starknet::{ContractAddress, send_message_to_l1_syscall, get_caller_address};
 
     /// # Errors
-    use cygnus::cyg::errors::Errors::{
-        ONLY_OWNER, PILLARS_ALREADY_SET, ABOVE_CAP, ONLY_PILLARS_OF_CREATION, CYG_MAINNET_ALREADY_SET,
-        THE_SYSTEM_HAS_FAILED, RECIPIENT_CANT_BE_CYG, INVALID_ETHEREUM_ADDRESS, RECIPIENT_HAS_PENDING_L1_MESSAGE,
-        INVALID_TELEPORTER, CRYSTALLINE_ENTOMBMENT, CANT_TELEPORT_ZERO, RECIPIENT_CANT_BE_TELEPORTER
-    };
+    use cygnus::cyg::errors::Errors;
 
     /// # Events
     use cygnus::cyg::events::Events::{
@@ -208,8 +204,11 @@ mod CygnusDAO {
 
     #[constructor]
     fn constructor(ref self: ContractState, owner: ContractAddress) {
+        // Write admin
         self.owner.write(owner);
-        self._mint(owner, 250000_000000000000000000); // Mint the owner 250k CYG tokens, same as other chains
+
+        // Every chain deployment is the same, mint 250k to owner and rest to pillars. 250k goes into TokenVesting.sol
+        self._mint(owner, 250000_000000000000000000);
     }
 
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -361,14 +360,14 @@ mod CygnusDAO {
         fn set_pillars_of_creation(ref self: ContractState, new_pillars_of_creation: ContractAddress) {
             /// # Error
             /// * `ONLY_OWNER` - Reverts if caller is not owner
-            assert(get_caller_address() == self.owner.read(), ONLY_OWNER);
+            assert(get_caller_address() == self.owner.read(), Errors::ONLY_OWNER);
 
             /// Pillars up to now
             let old_pillars_of_creation = self.pillars_of_creation.read();
 
             /// # Error 
             /// * `PILLARS_ALREADY_SET` - Reverts if pillars is not address zero
-            assert(old_pillars_of_creation.is_zero(), PILLARS_ALREADY_SET);
+            assert(old_pillars_of_creation.is_zero(), Errors::PILLARS_ALREADY_SET);
 
             /// Update storage
             self.pillars_of_creation.write(new_pillars_of_creation);
@@ -386,14 +385,14 @@ mod CygnusDAO {
         fn mint(ref self: ContractState, to: ContractAddress, amount: u128) {
             /// # Error
             /// * `ONLY_PILLARS_OF_CREATION` - Reverts if sender is not pillars contract
-            assert(get_caller_address() == self.pillars_of_creation.read(), ONLY_PILLARS_OF_CREATION);
+            assert(get_caller_address() == self.pillars_of_creation.read(), Errors::ONLY_PILLARS_OF_CREATION);
 
             /// Check total minted against cap, if below then update it
             let total_minted = self.total_minted.read() + amount;
 
             /// # Error
             /// * `ABOVE_CAP` - Reverts if minting above cap
-            assert(total_minted <= CAP, ABOVE_CAP);
+            assert(total_minted <= CAP, Errors::ABOVE_CAP);
 
             /// Update total minted storage
             self.total_minted.write(total_minted);
@@ -414,14 +413,14 @@ mod CygnusDAO {
         fn set_cyg_token_mainnet(ref self: ContractState, new_cyg_mainnet: felt252) {
             /// # Error
             /// * `ONLY_OWNER` - Reverts if caller is not owner
-            assert(get_caller_address() == self.owner.read(), ONLY_OWNER);
+            assert(get_caller_address() == self.owner.read(), Errors::ONLY_OWNER);
 
             /// Teleporter up to now
             let old_cyg_mainnet = self.cyg_token_mainnet.read();
 
             /// # Error 
             /// * `CYG_MAINNET_ALREADY_SET` - Reverts if teleporter is already set
-            assert(old_cyg_mainnet.is_zero(), CYG_MAINNET_ALREADY_SET);
+            assert(old_cyg_mainnet.is_zero(), Errors::CYG_MAINNET_ALREADY_SET);
 
             /// Update storage
             self.cyg_token_mainnet.write(new_cyg_mainnet);
@@ -431,55 +430,50 @@ mod CygnusDAO {
             self.emit(CygMainnetSet { old_cyg_mainnet, new_cyg_mainnet });
         }
 
-        /// Initiates the teleporting of CYG from starknet to Mainnet
+        /// Initiates the teleporting of CYG from starknet to Mainnet. Event emitted on consuming message.
         ///
         /// # Implementation
         /// * ICygnusDAO
         fn teleport(ref self: ContractState, recipient: felt252, amount: u128) {
             /// # Error
             /// * `INVALID_ETHEREUM_ADDRESS`
-            assert(recipient.is_non_zero() && recipient.into() < MAX_ETH_ADDRESS, INVALID_ETHEREUM_ADDRESS);
+            assert(recipient.is_non_zero() && recipient.into() < MAX_ETH_ADDRESS, Errors::INVALID_ETHEREUM_ADDRESS);
 
             /// # Error
             /// * `CANT_TELEPORT_ZERO`
-            assert(amount.is_non_zero(), CANT_TELEPORT_ZERO);
-
-            /// # Error
-            /// * `RECIPIENT_HAS_PENDING_L1_MESSAGE`
-            assert(self.pending_cyg_mainnet.read(recipient).is_zero(), RECIPIENT_HAS_PENDING_L1_MESSAGE);
+            assert(amount.is_non_zero(), Errors::CANT_TELEPORT_ZERO);
 
             /// Get CYG token address on Ethereum
             let cyg_token_mainnet = self.cyg_token_mainnet.read();
 
             /// # Error
             /// * `RECIPIENT_CANT_BE_TELEPORTER`
-            assert(recipient != cyg_token_mainnet, RECIPIENT_CANT_BE_TELEPORTER);
+            assert(recipient != cyg_token_mainnet, Errors::RECIPIENT_CANT_BE_TELEPORTER);
 
-            /// Burn tokens from caller
+            /// Burn tokens from caller, reverts on underflow
             let caller = get_caller_address();
             self._burn(caller, amount);
+
+            /// Pending CYG to be claimed by user on mainnet
+            let new_pending_cyg = self.pending_cyg_mainnet.read(recipient) + amount;
 
             /// Send message to L1
             let message: Array<felt252> = array![T_T, recipient, amount.into()];
 
             match send_message_to_l1_syscall(cyg_token_mainnet, message.span()) {
                 /// Update recipient pending message if success
-                Result::Ok(()) => { self.pending_cyg_mainnet.write(recipient, amount) },
+                Result::Ok(()) => { self.pending_cyg_mainnet.write(recipient, new_pending_cyg) },
                 /// # Error
                 /// * `TheSystemHasFailed`
-                Result::Err(err) => { panic_with_felt252(THE_SYSTEM_HAS_FAILED) }
+                Result::Err(err) => { panic_with_felt252(Errors::THE_SYSTEM_HAS_FAILED) }
             }
-
-            /// # Event
-            /// * `InitializeTeleport`
-            self.emit(InitializeTeleport { caller, recipient, amount });
         }
     }
 
     /// L1 Handler to handle teleports from Ethereum Mainnet to Starknet.
     ///
     /// # Arguments
-    /// * `from_address` - The ethereum address of the sender
+    /// * `from_address` - The address on Ethereum where the message initiated
     /// * `recipient` - The starknet address of the recipient of the CYG tokens
     /// * `amount` - The amount being bridged from mainnet to Starknet
     #[l1_handler]
@@ -488,11 +482,11 @@ mod CygnusDAO {
     ) {
         /// # Error
         /// * `INVALID_TELEPORTER` - Reverts if the message is not from the CYG token on mainnet
-        assert(from_address == self.cyg_token_mainnet.read(), INVALID_TELEPORTER);
+        assert(from_address == self.cyg_token_mainnet.read(), Errors::INVALID_TELEPORTER);
 
         // # Error
         // * `CRYSTALLINE_ENTOMBMENT`
-        assert(t_t == T_T, CRYSTALLINE_ENTOMBMENT);
+        assert(t_t == T_T, Errors::CRYSTALLINE_ENTOMBMENT);
 
         /// Mint to recipient
         self._mint(recipient, amount);
@@ -506,7 +500,7 @@ mod CygnusDAO {
     ///
     /// # Arguments
     /// * `from_address` - The address on Ethereum where the message initiated
-    /// * `recipient` - The address of the receiver of CYG on Ethereum
+    /// * `recipient` - The starknet address of the recipient of the CYG tokens
     /// * `amount` - The amount bridged from Starknet to Ethereum
     #[l1_handler]
     fn teleport_to_ethereum(
@@ -514,14 +508,24 @@ mod CygnusDAO {
     ) {
         /// # Error
         /// * `INVALID_TELEPORTER` - Reverts if the message is not from the CYG token on mainnet
-        assert(from_address == self.cyg_token_mainnet.read(), INVALID_TELEPORTER);
+        assert(from_address == self.cyg_token_mainnet.read(), Errors::INVALID_TELEPORTER);
 
-        // # Error
-        // * `CRYSTALLINE_ENTOMBMENT`
-        assert(t_t == T_T, CRYSTALLINE_ENTOMBMENT);
+        /// # Error
+        /// * `CRYSTALLINE_ENTOMBMENT`
+        assert(t_t == T_T, Errors::CRYSTALLINE_ENTOMBMENT);
+
+        /// Pending CYG until now
+        let pending_cyg = self.pending_cyg_mainnet.read(recipient.into());
+
+        /// Update pending CYG
+        let new_pending_cyg = if pending_cyg > amount {
+            pending_cyg - amount
+        } else {
+            0
+        };
 
         /// Reset recipient slot
-        self.pending_cyg_mainnet.write(recipient.into(), 0);
+        self.pending_cyg_mainnet.write(recipient.into(), new_pending_cyg);
 
         /// # Event
         /// * `TeleportToEthereum`

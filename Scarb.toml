@@ -13,21 +13,8 @@ repository = "https://github.com/CygnusDAO"
 
 [[target.starknet-contract]]
 allowed-libfuncs-list.name = "experimental"
-# Enable Sierra codegen.
 sierra = true
-
-# Enable CASM codegen.
 casm = true
-# Emit Python-powered hints in order to run compiled CASM class with legacy Cairo VM.
-casm-add-pythonic-hints = false
-
-# Enable allowed libfuncs validation.
-allowed-libfuncs = true
-# Raise errors instead of warnings if disallowed libfuncs are found.
-allowed-libfuncs-deny = false
-
-# Emit Starknet artifacts for contracts defined in dependencies.
-build-external-contracts = []
 
 [cairo]
 sierra-replace-ids = true
@@ -36,13 +23,13 @@ sierra-replace-ids = true
 snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.13.0" }
 starknet = "2.4.2"
 
-[tool.snforge]
-exit_first = true
-
 [[tool.snforge.fork]]
 name = "MAINNET"
-url = "https://starknet-mainnet.g.alchemy.com/v2/QIsxx87h6WcoewSQUsGXFFmEMgLU8GfW"
-block_id.number = "473027" # Latest
+url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_6"
+block_id.number = "501900" # Latest
+
+[tool.snforge]
+exit_first = true
 
 [tool.fmt]
 max-line-length = 120

@@ -10,7 +10,7 @@ use cygnus::orbiters::deneb::{IDenebDispatcher, IDenebDispatcherTrait};
 /// * `albireo_orbiter` - Address of the borrowable deployer
 /// * `deneb_orbiter` - Address of the collateral deployer
 /// * `name` - Human friendly name to identify deployers (ie. "Jediswap Pools", "Ekubo Pools", etc.)
-#[derive(Drop, starknet::Store, Serde)]
+#[derive(Drop, starknet::Store, Serde, Copy)]
 struct Orbiter {
     status: bool,
     orbiter_id: u32,
