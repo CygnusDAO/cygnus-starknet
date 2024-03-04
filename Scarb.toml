@@ -26,9 +26,8 @@ starknet = "2.5.3"
 
 [[tool.snforge.fork]]
 name = "MAINNET"
-url = "https://starknet-mainnet.blastapi.io/bdff07b0-9ca2-4f5c-a8cd-651f4d51f991/rpc/v0_6"
-#block_id.number = "501900" # Latest
-block_id.number = "598657"
+url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_6"
+block_id.number = "501900" # Latest
 
 [tool.snforge]
 exit_first = true
