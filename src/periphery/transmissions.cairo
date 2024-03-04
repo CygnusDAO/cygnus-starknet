@@ -341,7 +341,6 @@ mod Transmissions {
             let shuttle = hangar18.all_shuttles(shuttle_id);
 
             let borrowable = shuttle.borrowable;
-            let collateral = shuttle.collateral;
 
             /// Get the borrowable's total positions length
             let all_positions_length = borrowable.all_positions_length();

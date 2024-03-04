@@ -7,11 +7,11 @@ fn admin() -> ContractAddress {
 }
 
 fn borrower() -> ContractAddress {
-    contract_address_const::<0x06623706abf247216031b4205c1038b2b6db2026b98cad4a2823fddd2b7af055>()
+    contract_address_const::<0x0400ebcbb957e9821b0c08d211899dfcadccae07044c6d470cdc3663e6ed43d4>()
 }
 
 fn lender() -> ContractAddress {
-    contract_address_const::<0x00d4a8b36b0bb620f69d1901bbdb9d72d8dd77ee2055257ef1785ae705fe0cc6>()
+    contract_address_const::<0x059ddf33b7eb8a80c7772adcef1950000225fae213d07b872166efcf07acb897>()
 }
 
 fn dao_reserves_contract() -> ContractAddress {

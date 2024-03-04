@@ -3,7 +3,6 @@
 // Libraries
 use starknet::ContractAddress;
 
-/// # Interface - Altair
 #[starknet::interface]
 trait IJediswapRouter<T> {
     // @notice Swaps an exact amount of input tokens for as many output tokens as possible, along the route determined by the path

@@ -85,6 +85,14 @@ trait IAltair<T> {
     /// * The address of the Jediswap Router
     fn jediswap_router(self: @T) -> ContractAddress;
 
+    /// # Returns
+    /// * The address of Ekubo's Router v2.0.1
+    fn ekubo_router(self: @T) -> ContractAddress;
+
+    /// # Returns
+    /// * The address of Ekubo Core
+    fn ekubo_core(self: @T) -> ContractAddress;
+
     /// # Arguments
     /// * `extension_id` - The ID of an extension
     ///
@@ -319,6 +327,9 @@ mod Altair {
     use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait};
     use cygnus::periphery::altair_x::{IAltairXDispatcher, IAltairXDispatcherTrait, IAltairXLibraryDispatcher};
     use cygnus::periphery::integrations::jediswap_router::{IJediswapRouterDispatcher, IJediswapRouterDispatcherTrait};
+    use ekubo::interfaces::{
+        router::{IRouterDispatcher, IRouterDispatcherTrait}, core::{ICoreDispatcher, ICoreDispatcherTrait}
+    };
 
     /// # Libraries
     use cygnus::libraries::full_math_lib::FullMathLib::FixedPointMathLibTrait;
@@ -363,7 +374,11 @@ mod Altair {
         /// Fibrous
         fibrous_router: ContractAddress,
         /// Jediswap for on-chain swaps in case somethin goes wrong
-        jediswap_router: IJediswapRouterDispatcher
+        jediswap_router: IJediswapRouterDispatcher,
+        /// Ekubo router
+        ekubo_router: IRouterDispatcher,
+        /// Ekubo Core
+        ekubo_core: ICoreDispatcher
     }
 
     /// Selectors
@@ -389,23 +404,51 @@ mod Altair {
         self.usd.write(usd);
         self.native_token.write(native_token);
 
-        /// AVNU ROUTER
+        /// ----- These routers are used in most cases ------
+
+        /// Avnu router
         self
             .avnu_exchange
             .write(contract_address_const::<0x4270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f>());
 
-        /// FIBROUS ROUTER
+        /// Fibrous router
         self
             .fibrous_router
             .write(contract_address_const::<0x00f6f4CF62E3C010E0aC2451cC7807b5eEc19a40b0FaaCd00CCA3914280FDf5a>());
 
-        let jediswap_router = IJediswapRouterDispatcher {
-            contract_address: contract_address_const::<
-                0x041fd22b238fa21cfcf5dd45a8548974d8263b3a531a60388411c5e230f97023
-            >()
-        };
+        /// ------- These routers are used to handle the swaps on-chain if needed -----
 
-        self.jediswap_router.write(jediswap_router);
+        /// Jediswap router
+        self
+            .jediswap_router
+            .write(
+                IJediswapRouterDispatcher {
+                    contract_address: contract_address_const::<
+                        0x041fd22b238fa21cfcf5dd45a8548974d8263b3a531a60388411c5e230f97023
+                    >()
+                }
+            );
+
+        /// Ekubo router
+        self
+            .ekubo_router
+            .write(
+                IRouterDispatcher {
+                    contract_address: contract_address_const::<
+                        0x03266fe47923e1500aec0fa973df8093b5850bbce8dcd0666d3f47298b4b806e
+                    >()
+                }
+            );
+
+        self
+            .ekubo_core
+            .write(
+                ICoreDispatcher {
+                    contract_address: contract_address_const::<
+                        0x00000005dd3D2F4429AF886cD1a3b08289DBcEa99A294197E9eB43b0e0325b4b
+                    >()
+                }
+            );
     }
 
     /// -------------------------------------------------------------------------------------------------------
@@ -456,6 +499,18 @@ mod Altair {
         /// * IAltair
         fn jediswap_router(self: @ContractState) -> ContractAddress {
             self.jediswap_router.read().contract_address
+        }
+
+        /// # Implementation
+        /// * IAltair
+        fn ekubo_router(self: @ContractState) -> ContractAddress {
+            self.ekubo_router.read().contract_address
+        }
+
+        /// # Implementation
+        /// * IAltair
+        fn ekubo_core(self: @ContractState) -> ContractAddress {
+            self.ekubo_core.read().contract_address
         }
 
         /// # Implementation
@@ -511,11 +566,11 @@ mod Altair {
             let extension = self.extensions.read(lp_token);
 
             /// # Error
-            /// * WRONG
+            /// * `ALTAIR_EXTENSION_DOESNT_EXIST`
             assert(extension.contract_address.is_non_zero(), Errors::ALTAIR_EXTENSION_DOESNT_EXIST);
 
             /// The extension handles this logic
-            extension.get_assets_for_shares(lp_token, shares) 
+            extension.get_assets_for_shares(lp_token, shares)
         }
 
         /// Start periphery functions:
@@ -653,11 +708,11 @@ mod Altair {
             ref self: ContractState, sender: ContractAddress, borrow_amount: u128, calldata: Array<felt252>
         ) -> u128 {
             /// Get the extension for the vault
-            /// TODO - get the extension from the `caller` address
+            /// TODO - Replace all_extensions wtih caller_address
             let extension = self.all_extensions.read(0);
 
             /// # Error
-            /// * WRONG
+            /// * `ALTAIR_EXTENSION_DOESNT_EXIST`
             assert(extension.contract_address.is_non_zero(), Errors::ALTAIR_EXTENSION_DOESNT_EXIST);
 
             /// We delegate the call to the extension as each extension handles the logic of leveraging collateral.
@@ -748,7 +803,7 @@ mod Altair {
             aggregator: Aggregator,
             swapdata: Array<Span<felt252>>
         ) -> u128 {
-          // TODO
+            // TODO
             10
         }
 
@@ -772,13 +827,12 @@ mod Altair {
             /// # Error
             /// * `NOT_BORROWABLE` - Avoid if caller is not borrowable
             assert(get_caller_address() == calldata.borrowable, 'not_borrowable');
-
-            /// By now this contract has LPs that were flash redeemed from collateral. Burn the LP, receive
-            /// token0 and token1 assets, convert to USDC, repay loan or part of the loan. Collateral contract
-            /// is expecting an equivalent amount of the LP redeemed in CygLP, transfer from borrower to collateral
-            /// and burn the CygLP.
-            // TODO
-            //self._flash_liquidate(cyg_lp_amount, repay_amount, calldata)
+        /// By now this contract has LPs that were flash redeemed from collateral. Burn the LP, receive
+        /// token0 and token1 assets, convert to USDC, repay loan or part of the loan. Collateral contract
+        /// is expecting an equivalent amount of the LP redeemed in CygLP, transfer from borrower to collateral
+        /// and burn the CygLP.
+        // TODO
+        //self._flash_liquidate(cyg_lp_amount, repay_amount, calldata)
         }
 
         /// ---------------------------------------------------------------------------------------------------

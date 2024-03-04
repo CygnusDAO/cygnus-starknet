@@ -8,4 +8,6 @@ mod Errors {
     const CALLER_NOT_COLLATERAL: felt252 = 'caller_not_collateral';
     const SENDER_NOT_ROUTER: felt252 = 'sender_not_router';
     const ALTAIR_EXTENSION_DOESNT_EXIST: felt252 = 'extension_doesnt_exist';
+    const AVNU_SYSCALL_FAIL: felt252 = 'extension_avnu_call_fail';
+    const FIBROUS_SYSCALL_FAIL: felt252 = 'extension_fibrous_call_fail';
 }

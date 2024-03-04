@@ -25,20 +25,26 @@ const ONE_YEAR: u64 = 31536000;
 #[test]
 #[fork("MAINNET")]
 fn assets_for_shares() {
-    let (hangar18, borrowable, collateral, lp_token, usdc, altair) = setup_with_router();
+    let (hangar18, _, _, lp_token, _, altair) = setup_with_router();
 
     let shares = 1_000_000_000_000_000_000;
 
+    set_altair_xtension(hangar18, altair);
+
     let (amount0, amount1) = altair.get_assets_for_shares(lp_token.contract_address, shares);
 
+    /// Check manually
     amount0.print();
     amount1.print();
+
+    assert(amount0 > 0, 'wrong amount 0');
+    assert(amount1 > 0, 'wrong amount 1');
 }
 
 #[test]
 #[fork("MAINNET")]
 fn borrower_borrows_max_liquidity() {
-    let (hangar18, borrowable, collateral, lp_token, usdc, altair) = setup_with_router();
+    let (_, borrowable, collateral, lp_token, usdc, altair) = setup_with_router();
 
     let borrower = borrower();
     let lender = lender();
@@ -52,7 +58,7 @@ fn borrower_borrows_max_liquidity() {
     assert(cyg_lp_balance > 0, 'wrong_cyglp_shares');
     assert(cyg_usd_balance > 0, 'wrong_cygusd_shares');
 
-    let (liquidity, shortfall) = collateral.get_account_liquidity(borrower);
+    let (liquidity, _) = collateral.get_account_liquidity(borrower);
 
     let usd_bal_before = usdc.balanceOf(borrower);
 
@@ -64,7 +70,7 @@ fn borrower_borrows_max_liquidity() {
     altair.borrow(borrowable, liquidity, borrower, 100000000000000000);
     stop_prank(CheatTarget::One(altair.contract_address));
 
-    let (a, b, c) = collateral.get_borrower_position(borrower);
+    let (_, _, c) = collateral.get_borrower_position(borrower);
     assert(c == 1_000_000_000_000_000_000, 'wrong debt');
 
     let usd_bal_after = usdc.balanceOf(borrower);
@@ -89,7 +95,7 @@ fn borrower_leverage_usd_jediswap() {
     assert(cyg_lp_balance > 0, 'wrong_cyglp_shares');
     assert(cyg_usd_balance > 0, 'wrong_cygusd_shares');
 
-    let (liquidity, shortfall) = collateral.get_account_liquidity(borrower);
+    let (liquidity, _) = collateral.get_account_liquidity(borrower);
 
     start_prank(CheatTarget::One(borrowable.contract_address), borrower);
     borrowable.approve(altair.contract_address, liquidity);
@@ -126,6 +132,8 @@ fn borrower_leverage_usd_jediswap() {
     let slippage = liquidity - liquidity / 50; // 2%
     let lps_received = balance_after - balance_before;
 
+    lps_received.print();
+
     assert(lps_received * lp_price >= slippage, 'too much slippage');
 }
 
@@ -146,7 +154,7 @@ fn borrower_deleverages_jediswap() {
     assert(cyg_lp_balance > 0, 'wrong_cyglp_shares');
     assert(cyg_usd_balance > 0, 'wrong_cygusd_shares');
 
-    let (liquidity, shortfall) = collateral.get_account_liquidity(borrower);
+    let (liquidity, _) = collateral.get_account_liquidity(borrower);
 
     start_prank(CheatTarget::One(borrowable.contract_address), borrower);
     borrowable.approve(altair.contract_address, liquidity);
@@ -210,6 +218,158 @@ fn borrower_deleverages_jediswap() {
     let (_, borrow_balance_after) = borrowable.get_borrow_balance(borrower);
 
     assert(borrow_balance_after < borrow_balance, 'didnt_repay');
+
+    'Borrow balance left'.print();
+    borrow_balance_after.print();
+}
+
+#[test]
+#[fork("MAINNET")]
+fn borrower_leverage_usd_ekubo() {
+    let (hangar18, borrowable, collateral, lp_token, usdc, altair) = setup_with_router();
+
+    let borrower = borrower();
+    let lender = lender();
+
+    deposit_lp_token(borrower, lp_token, collateral);
+    deposit_usdc(lender, usdc, borrowable);
+
+    let cyg_lp_balance = collateral.balance_of(borrower);
+    let cyg_usd_balance = borrowable.balance_of(lender);
+
+    assert(cyg_lp_balance > 0, 'wrong_cyglp_shares');
+    assert(cyg_usd_balance > 0, 'wrong_cygusd_shares');
+
+    let (liquidity, _) = collateral.get_account_liquidity(borrower);
+
+    start_prank(CheatTarget::One(borrowable.contract_address), borrower);
+    borrowable.approve(altair.contract_address, liquidity);
+    stop_prank(CheatTarget::One(borrowable.contract_address));
+
+    // Set altair extension
+    set_altair_xtension(hangar18, altair);
+
+    start_prank(CheatTarget::One(altair.contract_address), borrower);
+
+    let zero = array![];
+
+    let balance_before = collateral.balance_of(borrower);
+
+    altair
+        .leverage(
+            lp_token.contract_address,
+            collateral.contract_address,
+            borrowable.contract_address,
+            liquidity,
+            0,
+            1000000000000,
+            Aggregator::EKUBO,
+            array![zero.span(), zero.span()]
+        );
+
+    stop_prank(CheatTarget::One(altair.contract_address));
+
+    let lp_price = collateral.get_lp_token_price();
+    let balance_after = collateral.balance_of(borrower);
+
+    // We want to make sure that the amount of LP received is equivalent to the borrowed amount of USDC 
+    // So if we borrowed $100 and each LP is worth $10, we make sure that we received at least 9.8 LP Tokens
+    let slippage = liquidity - liquidity / 50; // 2%
+    let lps_received = balance_after - balance_before;
+
+    'LPs Received'.print();
+    lps_received.print();
+
+    assert(lps_received * lp_price >= slippage, 'too much slippage');
+}
+
+#[test]
+#[fork("MAINNET")]
+fn borrower_deleverage_ekubo() {
+    let (hangar18, borrowable, collateral, lp_token, usdc, altair) = setup_with_router();
+
+    let borrower = borrower();
+    let lender = lender();
+
+    deposit_lp_token(borrower, lp_token, collateral);
+    deposit_usdc(lender, usdc, borrowable);
+
+    let cyg_lp_balance = collateral.balance_of(borrower);
+    let cyg_usd_balance = borrowable.balance_of(lender);
+
+    assert(cyg_lp_balance > 0, 'wrong_cyglp_shares');
+    assert(cyg_usd_balance > 0, 'wrong_cygusd_shares');
+
+    let (liquidity, _) = collateral.get_account_liquidity(borrower);
+
+    start_prank(CheatTarget::One(borrowable.contract_address), borrower);
+    borrowable.approve(altair.contract_address, liquidity);
+    stop_prank(CheatTarget::One(borrowable.contract_address));
+
+    // Set altair extension
+    set_altair_xtension(hangar18, altair);
+
+    start_prank(CheatTarget::One(altair.contract_address), borrower);
+
+    let zero = array![];
+
+    let balance_before = collateral.balance_of(borrower);
+
+    altair
+        .leverage(
+            lp_token.contract_address,
+            collateral.contract_address,
+            borrowable.contract_address,
+            liquidity,
+            0,
+            1000000000000,
+            Aggregator::EKUBO,
+            array![zero.span(), zero.span()]
+        );
+
+    stop_prank(CheatTarget::One(altair.contract_address));
+
+    let lp_price = collateral.get_lp_token_price();
+    let balance_after = collateral.balance_of(borrower);
+
+    // We want to make sure that the amount of LP received is equivalent to the borrowed amount of USDC 
+    // So if we borrowed $100 and each LP is worth $10, we make sure that we received at least 9.8 LP Tokens
+    let slippage = liquidity - liquidity / 50; // 2%
+    let lps_received = balance_after - balance_before;
+
+    'LPs Received'.print();
+    lps_received.print();
+
+    assert(lps_received * lp_price >= slippage, 'too much slippage');
+
+    start_prank(CheatTarget::One(collateral.contract_address), borrower);
+    collateral.approve(altair.contract_address, lps_received);
+    stop_prank(CheatTarget::One(collateral.contract_address));
+
+    start_prank(CheatTarget::One(altair.contract_address), borrower);
+
+    let (_, borrow_balance) = borrowable.get_borrow_balance(borrower);
+
+    altair
+        .deleverage(
+            lp_token.contract_address,
+            collateral.contract_address,
+            borrowable.contract_address,
+            lps_received,
+            0,
+            1000000000000,
+            Aggregator::EKUBO,
+            array![zero.span(), zero.span()]
+        );
+
+    stop_prank(CheatTarget::One(altair.contract_address));
+
+    let (_, borrow_balance_after) = borrowable.get_borrow_balance(borrower);
+
+    assert(borrow_balance_after < borrow_balance, 'didnt_repay');
+
+    'Borrow balance left'.print();
+    borrow_balance_after.print();
 }
 
 // ------------------------------------------------------------------------------------------------------------------

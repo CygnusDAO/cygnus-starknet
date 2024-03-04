@@ -465,7 +465,7 @@ mod CygnusDAO {
                 Result::Ok(()) => { self.pending_cyg_mainnet.write(recipient, new_pending_cyg) },
                 /// # Error
                 /// * `TheSystemHasFailed`
-                Result::Err(err) => { panic_with_felt252(Errors::THE_SYSTEM_HAS_FAILED) }
+                Result::Err(_) => { panic_with_felt252(Errors::THE_SYSTEM_HAS_FAILED) }
             }
         }
     }

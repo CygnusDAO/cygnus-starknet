@@ -183,14 +183,14 @@ const ONE_YEAR: u64 = 31536000;
 #[test]
 #[fork("MAINNET")]
 fn deploys_cyg_token_with_proper_cap() {
-    let (hangar18, borrowable, collateral, lp_token, usdc, router, cyg, pillars) = setup_with_pillars();
+    let (_, _, _, _, _, _, cyg, _) = setup_with_pillars();
     assert(cyg.CAP() == 5_000000_000000000_000000000, 'wrong_cap');
 }
 
 #[test]
 #[fork("MAINNET")]
 fn initializes_pillars_correctly() {
-    let (hangar18, borrowable, collateral, lp_token, usdc, router, cyg, pillars) = setup_with_pillars();
+    let (_, _, _, _, _, _, _, pillars) = setup_with_pillars();
     let cyg_per_block = pillars.cyg_per_block_rewards();
     assert(cyg_per_block == 0, 'wrong_cpb');
 
@@ -213,7 +213,7 @@ fn initializes_pillars_correctly() {
 #[test]
 #[fork("MAINNET")]
 fn set_pillars_in_borrowable() {
-    let (hangar18, borrowable, collateral, lp_token, usdc, router, cyg, pillars) = setup_with_pillars();
+    let (_, borrowable, _, _, _, _, _, pillars) = setup_with_pillars();
     let admin = admin();
 
     start_prank(CheatTarget::One(pillars.contract_address), admin);
@@ -230,7 +230,7 @@ fn set_pillars_in_borrowable() {
 #[test]
 #[fork("MAINNET")]
 fn initializes_rewards_for_shuttle_in_pillars() {
-    let (hangar18, borrowable, collateral, lp_token, usdc, router, cyg, pillars) = setup_with_pillars();
+    let (_, borrowable, collateral, _, _, _, _, pillars) = setup_with_pillars();
 
     let admin = admin();
 
@@ -261,7 +261,7 @@ fn initializes_rewards_for_shuttle_in_pillars() {
 #[test]
 #[fork("MAINNET")]
 fn lend_rewards_are_tracked_correctly() {
-    let (hangar18, borrowable, collateral, lp_token, usdc, router, cyg, pillars) = setup_with_pillars();
+    let (_, borrowable, collateral, lp_token, usdc, _, _, pillars) = setup_with_pillars();
 
     let admin = admin();
 
@@ -302,7 +302,7 @@ fn lend_rewards_are_tracked_correctly() {
 #[test]
 #[fork("MAINNET")]
 fn lend_rewards_are_accrued_correctly() {
-    let (hangar18, borrowable, collateral, lp_token, usdc, router, cyg, pillars) = setup_with_pillars();
+    let (_, borrowable, collateral, lp_token, usdc, _, cyg, pillars) = setup_with_pillars();
 
     let admin = admin();
 
@@ -354,16 +354,13 @@ fn lend_rewards_are_accrued_correctly() {
     assert(pending_rewards > 0, 'wrong pending');
     assert(pending_rewards_all > 0, 'wrong pending');
 
-    let progression = pillars.epoch_progression();
-    let current_epoch_rewards = pillars.current_epoch_rewards();
-
     stop_warp(CheatTarget::One(pillars.contract_address));
 }
 
 #[test]
 #[fork("MAINNET")]
 fn borrow_rewards_are_accrued_correctly() {
-    let (hangar18, borrowable, collateral, lp_token, usdc, router, cyg, pillars) = setup_with_pillars();
+    let (hangar18, borrowable, collateral, lp_token, usdc, _, cyg, pillars) = setup_with_pillars();
 
     let admin = admin();
 
@@ -400,7 +397,7 @@ fn borrow_rewards_are_accrued_correctly() {
     assert(cyg_lp_balance > 0, 'wrong_cyglp_shares');
     assert(cyg_usd_balance > 0, 'wrong_cygusd_shares');
 
-    let (liquidity, shortfall) = collateral.get_account_liquidity(borrower);
+    let (liquidity, _) = collateral.get_account_liquidity(borrower);
 
     start_prank(CheatTarget::One(borrowable.contract_address), borrower);
     borrowable.borrow(borrower, borrower, liquidity, Default::default());
@@ -430,7 +427,7 @@ fn borrow_rewards_are_accrued_correctly() {
 #[test]
 #[fork("MAINNET")]
 fn advancing_updates_all_vars_correctly() {
-    let (hangar18, borrowable, collateral, lp_token, usdc, router, cyg, pillars) = setup_with_pillars();
+    let (_, _, _, _, _, _, cyg, pillars) = setup_with_pillars();
 
     let admin = admin();
 
@@ -444,15 +441,12 @@ fn advancing_updates_all_vars_correctly() {
     pillars.initialize_pillars();
     stop_prank(CheatTarget::One(pillars.contract_address));
 
-    let cyg_per_block_epoch = pillars.calculate_cyg_per_block(0, 4_250_000_000000000000000000);
     let cyg_rewards_epoch = pillars.calculate_epoch_rewards(0, 4_250_000_000000000000000000);
     assert(cyg_rewards_epoch == 53695003452712558725959, 'wrong_epoch_0_rewards');
 
-    let cyg_per_block_epoch = pillars.calculate_cyg_per_block(1, 4_250_000_000000000000000000);
     let cyg_rewards_epoch = pillars.calculate_epoch_rewards(1, 4_250_000_000000000000000000);
     assert(cyg_rewards_epoch == 53158053418185433538964, 'wrong_epoch_1_rewards');
 
-    let cyg_per_block_epoch = pillars.calculate_cyg_per_block(5, 4_250_000_000000000000000000);
     let cyg_rewards_epoch = pillars.calculate_epoch_rewards(5, 4_250_000_000000000000000000);
     assert(cyg_rewards_epoch == 51063414012875788794426, 'wrong_epoch_5_rewards');
 }
@@ -460,7 +454,7 @@ fn advancing_updates_all_vars_correctly() {
 #[test]
 #[fork("MAINNET")]
 fn borrower_advances_epoch_and_collects_all() {
-    let (hangar18, borrowable, collateral, lp_token, usdc, router, cyg, pillars) = setup_with_pillars();
+    let (hangar18, borrowable, collateral, lp_token, usdc, _, cyg, pillars) = setup_with_pillars();
 
     let admin = admin();
 
@@ -505,7 +499,7 @@ fn borrower_advances_epoch_and_collects_all() {
     assert(cyg_lp_balance > 0, 'wrong_cyglp_shares');
     assert(cyg_usd_balance > 0, 'wrong_cygusd_shares');
 
-    let (liquidity, shortfall) = collateral.get_account_liquidity(borrower);
+    let (liquidity, _) = collateral.get_account_liquidity(borrower);
 
     start_prank(CheatTarget::One(borrowable.contract_address), borrower);
     borrowable.borrow(borrower, borrower, liquidity, Default::default());
@@ -568,7 +562,7 @@ fn borrower_advances_epoch_and_collects_all() {
 #[test]
 #[fork("MAINNET")]
 fn lender_rewards_are_correct_across_multiple_users() {
-    let (hangar18, borrowable, collateral, lp_token, usdc, router, cyg, pillars) = setup_with_pillars();
+    let (_, borrowable, collateral, _, usdc, _, cyg, pillars) = setup_with_pillars();
 
     let admin = admin();
 
@@ -620,8 +614,6 @@ fn lender_rewards_are_correct_across_multiple_users() {
     start_prank(CheatTarget::One(pillars.contract_address), lender);
     pillars.collect_cyg_all(lender);
     stop_prank(CheatTarget::One(pillars.contract_address));
-
-    let bal = cyg.balance_of(lender);
 
     start_prank(CheatTarget::One(pillars.contract_address), lender_three);
     pillars.collect_cyg_all(lender_three);

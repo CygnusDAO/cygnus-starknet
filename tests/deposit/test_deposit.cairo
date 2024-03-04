@@ -22,7 +22,7 @@ use snforge_std::PrintTrait;
 #[test]
 #[fork("MAINNET")]
 fn deployed_correctly() {
-    let (hangar18, borrowable, collateral, lp_token, usdc) = setup();
+    let (_, _, _, lp_token, usdc) = setup();
     let borrower = borrower();
     let balance = lp_token.balanceOf(borrower.into());
 
@@ -37,7 +37,7 @@ fn deployed_correctly() {
 #[test]
 #[fork("MAINNET")]
 fn borrower_deposits_lp_in_collateral_and_mints_correct_shares() {
-    let (hangar18, borrowable, collateral, lp_token, usdc) = setup();
+    let (_, _, collateral, lp_token, _) = setup();
 
     let borrower = borrower();
 
@@ -60,7 +60,7 @@ fn borrower_deposits_lp_in_collateral_and_mints_correct_shares() {
 #[test]
 #[fork("MAINNET")]
 fn lender_deposits_usd_in_borrowable_and_mints_correct_shares() {
-    let (hangar18, borrowable, collateral, lp_token, usdc) = setup();
+    let (_, borrowable, _, _, usdc) = setup();
 
     let lender = lender();
 
@@ -78,16 +78,12 @@ fn lender_deposits_usd_in_borrowable_and_mints_correct_shares() {
     let cyg_usd_balance = borrowable.balance_of(lender);
 
     assert(cyg_usd_balance.into() == usdc_balance - 1000, 'wrong_cyg_usd_shares');
-
-    let (pos0, pos1, pos2) = borrowable.get_lender_position(lender);
-
-    let usd_price = borrowable.get_usd_price();
 }
 
 #[test]
 #[fork("MAINNET")]
 fn collateral_values_update_correctly() {
-    let (hangar18, borrowable, collateral, lp_token, usdc) = setup();
+    let (_, _, collateral, lp_token, _) = setup();
 
     let borrower = borrower();
 
@@ -110,7 +106,7 @@ fn collateral_values_update_correctly() {
 #[test]
 #[fork("MAINNET")]
 fn borrowable_values_update_correctly() {
-    let (hangar18, borrowable, collateral, lp_token, usdc) = setup();
+    let (_, borrowable, _, _, usdc) = setup();
 
     let lender = lender();
 

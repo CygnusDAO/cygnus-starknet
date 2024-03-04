@@ -157,7 +157,7 @@ fn deploy_registry(lp_token: ContractAddress) -> INebulaRegistryDispatcher {
     let usdc_address: ContractAddress = contract_address_const::<
         0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8
     >();
-    let usdc = IERC20Dispatcher { contract_address: usdc_address };
+
     let constructor_calldata = array![usdc_address.into(), registry.contract_address.into()];
     let nebula = contract.deploy(@constructor_calldata).unwrap();
 
@@ -215,8 +215,6 @@ fn setup_with_pillars() -> (
     let altair = IAltairDispatcher { contract_address };
 
     // Deploy CYG
-    let name = 'CygnusDAO';
-    let symbol = 'CYG';
     let owner = admin();
     let contract = declare('CygnusDAO');
     let constructor_calldata = array![owner.into()];

@@ -32,13 +32,13 @@
 //                      ░░░░░░    ░░░░░░      -------=========*                      .                     ⠀
 //          .                            .       .          .            .                        .             .⠀
 //       
-//       JEDISWAP LP - https://cygnusdao.finance                                                          .                     .
+//       ALTAIR EXTENSION - JEDISWAP LP - https://cygnusdao.finance                                                          .                     .
 //  ═══════════════════════════════════════════════════════════════════════════════════════════════════════════
 
-// Libraries
-use starknet::{ContractAddress, ClassHash};
-use cygnus::data::altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition, LenderPosition};
 use cygnus::data::calldata::{Aggregator};
+use starknet::{ContractAddress, ClassHash};
+use cygnus::token::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
+use cygnus::data::altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition, LenderPosition};
 use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait};
 
 /// # Interface - Altair
@@ -83,6 +83,14 @@ trait IAltairX<T> {
     /// # Returns
     /// * The address of the Jediswap Router
     fn jediswap_router(self: @T) -> ContractAddress;
+
+    /// # Returns
+    /// * The address of the Ekubo Router (v2.0.1)
+    fn ekubo_router(self: @T) -> ContractAddress;
+
+    /// # Returns
+    /// * The address of Ekubo Core
+    fn ekubo_core(self: @T) -> ContractAddress;
 
     /// Get assets out of token0 and token1 by burning `shares` of `lp_token`
     ///
@@ -159,7 +167,7 @@ mod AltairX {
     use cygnus::libraries::full_math_lib::FullMathLib::FixedPointMathLibTrait;
     use starknet::{
         ContractAddress, get_caller_address, get_contract_address, get_block_timestamp, contract_address_const,
-        call_contract_syscall, ClassHash
+        call_contract_syscall, ClassHash, SyscallResultTrait
     };
 
     /// # Errors
@@ -172,7 +180,15 @@ mod AltairX {
     };
 
     /// Aggregators
-    use cygnus::periphery::integrations::jediswap_router::{IJediswapRouterDispatcher, IJediswapRouterDispatcherTrait};
+    use cygnus::periphery::integrations::{
+        jediswap_router::{IJediswapRouterDispatcher, IJediswapRouterDispatcherTrait},
+        ekubo_router::{IRouterDispatcher, IRouterDispatcherTrait, TokenAmount, RouteNode}
+    };
+    use ekubo::{
+        interfaces::{core::{ICoreDispatcher, ICoreDispatcherTrait}}, types::{keys::{PoolKey}, i129::{i129, i129_new}},
+        components::clear::{IClearDispatcher, IClearDispatcherTrait}
+    };
+
 
     /// -------------------------------------------------------------------------------------------------------
     ///     3. STORAGE
@@ -197,7 +213,11 @@ mod AltairX {
         /// Fibrous
         fibrous_router: ContractAddress,
         /// Jediswap for on-chain swaps
-        jediswap_router: IJediswapRouterDispatcher
+        jediswap_router: IJediswapRouterDispatcher,
+        /// Ekubo router
+        ekubo_router: IRouterDispatcher,
+        /// Core
+        ekubo_core: ICoreDispatcher
     }
 
     /// Selectors
@@ -219,25 +239,25 @@ mod AltairX {
         /// Write class clash to storage
         self.class_hash.write(class_hash);
 
+        /// Store the address of this extension to make sure some functions can only be called via `library` calls
+        /// ie. delegate calls only
+        self.my_address.write(get_contract_address());
+
         // Get native and usd from factory
         let native_token = IERC20Dispatcher { contract_address: hangar18.native_token() };
         let usd = IERC20Dispatcher { contract_address: hangar18.usd() };
 
-        // Store factory and dispatchers
+        // Store factory, stablecoin we use (usdc) and native (weth) for this chain
         self.hangar18.write(hangar18);
         self.usd.write(usd);
         self.native_token.write(native_token);
 
-        /// AVNU Router
+        /// Store aggregators we use from altair
         self.avnu_exchange.write(altair.avnu_exchange());
-
-        /// FIBROUS Router
         self.fibrous_router.write(altair.fibrous_router());
-
-        /// Jediswap for emergency
         self.jediswap_router.write(IJediswapRouterDispatcher { contract_address: altair.jediswap_router() });
-
-        self.my_address.write(get_contract_address());
+        self.ekubo_router.write(IRouterDispatcher { contract_address: altair.ekubo_router() });
+        self.ekubo_core.write(ICoreDispatcher { contract_address: altair.ekubo_core() });
     }
 
     /// -------------------------------------------------------------------------------------------------------
@@ -247,38 +267,38 @@ mod AltairX {
     #[abi(embed_v0)]
     impl AltairImpl of IAltairX<ContractState> {
         /// # Implementation
-        /// * IAltair
+        /// * IAltairX
         fn name(self: @ContractState) -> felt252 {
             /// This extension is for jediswap LPs only
             'Altair Extension: Jediswap'
         }
 
         /// # Implementation
-        /// * IAltair
+        /// * IAltairX
         fn hangar18(self: @ContractState) -> ContractAddress {
             self.hangar18.read().contract_address
         }
 
         /// # Implementation
-        /// * IAltair
+        /// * IAltairX
         fn admin(self: @ContractState) -> ContractAddress {
             self.hangar18.read().admin()
         }
 
         /// # Implementation
-        /// * IAltair
+        /// * IAltairX
         fn class_hash(self: @ContractState) -> ClassHash {
             self.class_hash.read()
         }
 
         /// # Implementation
-        /// * IAltair
+        /// * IAltairX
         fn usd(self: @ContractState) -> ContractAddress {
             self.usd.read().contract_address
         }
 
         /// # Implementation
-        /// * IAltair
+        /// * IAltairX
         fn native_token(self: @ContractState) -> ContractAddress {
             self.native_token.read().contract_address
         }
@@ -286,25 +306,37 @@ mod AltairX {
         /// Aggregators
 
         /// # Implementation
-        /// * IAltair
+        /// * IAltairX
         fn jediswap_router(self: @ContractState) -> ContractAddress {
             self.jediswap_router.read().contract_address
         }
 
         /// # Implementation
-        /// * IAltair
+        /// * IAltairX
+        fn ekubo_router(self: @ContractState) -> ContractAddress {
+            self.ekubo_router.read().contract_address
+        }
+
+        /// # Implementation
+        /// * IAltairX
+        fn ekubo_core(self: @ContractState) -> ContractAddress {
+            self.ekubo_core.read().contract_address
+        }
+
+        /// # Implementation
+        /// * IAltairX
         fn avnu_exchange(self: @ContractState) -> ContractAddress {
             self.avnu_exchange.read()
         }
 
         /// # Implementation
-        /// * IAltair
+        /// * IAltairX
         fn fibrous_router(self: @ContractState) -> ContractAddress {
             self.fibrous_router.read()
         }
 
         /// # Implementation
-        /// * IAltair
+        /// * IAltairX
         fn get_assets_for_shares(self: @ContractState, lp_token: ContractAddress, shares: u128) -> (u128, u128) {
             /// LP token (dont use dispatcher in interface so support other dexes/lps)
             let lp_token = IUniswapV2PairDispatcher { contract_address: lp_token };
@@ -370,7 +402,7 @@ mod AltairX {
         /// ---------------------------------------------------------------------------------------------------
 
         /// # Implementation
-        /// * IAltair
+        /// * IAltairX
         fn altair_redeem_u91A(
             ref self: ContractState, sender: ContractAddress, redeem_amount: u128, calldata: Array<felt252>
         ) -> u128 {
@@ -401,7 +433,7 @@ mod AltairX {
         /// ---------------------------------------------------------------------------------------------------
 
         /// # Implementation
-        /// * IAltair
+        /// * IAltairX
         fn altair_liquidate_f2x(
             ref self: ContractState,
             sender: ContractAddress,
@@ -524,7 +556,6 @@ mod AltairX {
             liquidity.try_into().unwrap()
         }
     }
-
 
     #[generate_trait]
     impl DeleverageImpl of DeleverageImplTrait {
@@ -705,6 +736,31 @@ mod AltairX {
     /// Logic for handling aggregators and leveraging/deleveraging
     #[generate_trait]
     impl AggregatorsImpl of AggregatorsImplTrait {
+        /// Chooses the aggregator from the calldata
+        ///
+        /// # Arguments
+        /// * `token_in` - The address of the token we are swapping
+        /// * `token_out` - The address of the token we are receiving
+        /// * `aggregator` - Enum representing which aggregator to use
+        /// * `amount_in` - The amount of `token_in` we are swapping
+        /// * `swapdata` - The swapdata for the aggregator
+        fn _swap_tokens_aggregator(
+            ref self: ContractState,
+            token_in: ContractAddress,
+            token_out: ContractAddress,
+            amount_in: u256,
+            aggregator: Aggregator,
+            swapdata: Span<felt252>,
+        ) {
+            /// Perform the swap with chosen aggregator
+            match aggregator {
+                Aggregator::AVNU => self._swap_tokens_avnu(token_in, token_out, amount_in, swapdata),
+                Aggregator::EKUBO => self._swap_tokens_ekubo(token_in, token_out, amount_in),
+                Aggregator::FIBROUS => self._swap_tokens_fibrous(token_in, token_out, amount_in, swapdata),
+                Aggregator::JEDISWAP => self._swap_tokens_jediswap(token_in, token_out, amount_in),
+            }
+        }
+
         /// Performs the swap with Jediswap's Router (UniV2Router02)
         ///
         /// # Arguments
@@ -714,15 +770,8 @@ mod AltairX {
         fn _swap_tokens_jediswap(
             ref self: ContractState, token_in: ContractAddress, token_out: ContractAddress, amount_in: u256
         ) {
-            /// Get native token (ie. WETH)
-            let native_token = self.native_token.read().contract_address;
-
-            /// Always bridge through naitve token first if necessary. 
-            let path: Array<ContractAddress> = if token_in != native_token && token_out != native_token {
-                array![token_in, native_token, token_out]
-            } else {
-                array![token_in, token_out]
-            };
+            /// Create path of token in to token out
+            let path: Array<ContractAddress> = array![token_in, token_out];
 
             /// Approve router in token_in
             self._approve_token(token_in, self.jediswap_router.read().contract_address, amount_in);
@@ -733,6 +782,35 @@ mod AltairX {
                 .jediswap_router
                 .read()
                 .swap_exact_tokens_for_tokens(amount_in, 0, path, get_contract_address(), get_block_timestamp());
+        }
+
+        /// Performs the swap with Ekubo's Router
+        ///
+        /// # Arguments
+        /// * `token_in` - The address of the token we are swapping
+        /// * `token_out` - The address of the token we are receiving
+        /// * `amount_in` - The amount of `token_in` we are swapping
+        fn _swap_tokens_ekubo(
+            ref self: ContractState, token_in: ContractAddress, token_out: ContractAddress, amount_in: u256
+        ) {
+            /// Read ekubo router from storage
+            let ekubo_router = self.ekubo_router.read();
+
+            /// 1. Get optimal `pool_key` given `token_in` and `token_out` (we check which pool has the best quote)
+            let pool_key = self._get_optimal_ekubo_pool(token_in, token_out);
+
+            /// 2. Create route and token amounts
+            let route_node = RouteNode { pool_key: pool_key, sqrt_ratio_limit: 0, skip_ahead: 0 };
+            let token_amount = TokenAmount { token: token_in, amount: i129_new(amount_in.try_into().unwrap(), false) };
+
+            /// 3. Transfer `amount_in` to the router
+            IERC20Dispatcher { contract_address: token_in }.transfer(ekubo_router.contract_address, amount_in);
+
+            /// 4. Swap exact amount of `token_in` for `token_out`
+            ekubo_router.swap(route_node, token_amount);
+
+            /// 5. Withdraw and receive `token_out`, we check for minimum at the end of the leverage/deleverage call
+            ekubo_router.clear(token_out);
         }
 
         /// Performs the swap with Avnu's Exchange Router
@@ -754,8 +832,11 @@ mod AltairX {
             /// Approve router in token_in
             self._approve_token(token_in, avnu_exchange, amount_in);
 
-            /// Swap
-            call_contract_syscall(avnu_exchange, AVNU_SELECTOR, swapdata);
+            /// An internal call can’t return Err(_) as this is not handled by the sequencer and the Starknet OS.
+            /// If call_contract_syscall fails, this can’t be caught and will therefore result in the entire 
+            /// transaction being reverted.
+            /// https://book.cairo-lang.org/appendix-07-system-calls.html?highlight=call_contract#call_contract
+            call_contract_syscall(avnu_exchange, AVNU_SELECTOR, swapdata).unwrap_syscall();
         }
 
         /// Performs the swap with Fibrous Router V2
@@ -777,33 +858,11 @@ mod AltairX {
             /// Approve router in token_in
             self._approve_token(token_in, fibrous_router, amount_in);
 
-            /// Swap
-            call_contract_syscall(fibrous_router, FIBROUS_SELECTOR, swapdata);
-        }
-
-        /// Chooses the aggregator from the calldata
-        ///
-        /// # Arguments
-        /// * `token_in` - The address of the token we are swapping
-        /// * `token_out` - The address of the token we are receiving
-        /// * `aggregator` - Enum representing which aggregator to use
-        /// * `amount_in` - The amount of `token_in` we are swapping
-        /// * `swapdata` - The swapdata for the aggregator
-        fn _swap_tokens_aggregator(
-            ref self: ContractState,
-            token_in: ContractAddress,
-            token_out: ContractAddress,
-            amount_in: u256,
-            aggregator: Aggregator,
-            swapdata: Span<felt252>,
-        ) {
-            /// Perform the swap with chosen aggregator
-            match aggregator {
-                Aggregator::NONE => (()),
-                Aggregator::AVNU => self._swap_tokens_avnu(token_in, token_out, amount_in, swapdata),
-                Aggregator::FIBROUS => self._swap_tokens_fibrous(token_in, token_out, amount_in, swapdata),
-                Aggregator::JEDISWAP => self._swap_tokens_jediswap(token_in, token_out, amount_in),
-            }
+            /// An internal call can’t return Err(_) as this is not handled by the sequencer and the Starknet OS.
+            /// If call_contract_syscall fails, this can’t be caught and will therefore result in the entire 
+            /// transaction being reverted.
+            /// https://book.cairo-lang.org/appendix-07-system-calls.html?highlight=call_contract#call_contract
+            call_contract_syscall(fibrous_router, FIBROUS_SELECTOR, swapdata).unwrap_syscall();
         }
     }
 
@@ -852,7 +911,7 @@ mod AltairX {
             shares.full_mul_div(collateral.total_assets(), collateral.total_supply())
         }
 
-        /// Check balance of ERC20 token
+        /// Check balance of ERC20 token owned by this contract
         #[inline(always)]
         fn _check_balance(self: @ContractState, contract_address: ContractAddress) -> u128 {
             IERC20Dispatcher { contract_address }.balanceOf(get_contract_address()).try_into().unwrap()
@@ -877,20 +936,23 @@ mod AltairX {
         fn _clean_dust(
             ref self: ContractState, token0: ContractAddress, token1: ContractAddress, recipient: ContractAddress
         ) {
-            let balance = IERC20Dispatcher { contract_address: token0 }.balanceOf(get_contract_address());
+            /// Check token0 and sweep
+            let mut balance = self._check_balance(token0);
             if (balance > 0) {
-                IERC20Dispatcher { contract_address: token0 }.transfer(recipient, balance);
+                IERC20Dispatcher { contract_address: token0 }.transfer(recipient, balance.into());
             }
 
-            let balance = IERC20Dispatcher { contract_address: token1 }.balanceOf(get_contract_address());
+            /// Check token1 and sweep
+            balance = self._check_balance(token1);
             if (balance > 0) {
-                IERC20Dispatcher { contract_address: token1 }.transfer(recipient, balance);
+                IERC20Dispatcher { contract_address: token1 }.transfer(recipient, balance.into());
             }
 
+            /// Check for USDC dust
             let usd = self.usd.read().contract_address;
-            let balance = IERC20Dispatcher { contract_address: usd }.balanceOf(get_contract_address());
+            balance = self._check_balance(usd);
             if (balance > 0) {
-                IERC20Dispatcher { contract_address: usd }.transfer(recipient, balance);
+                IERC20Dispatcher { contract_address: usd }.transfer(recipient, balance.into());
             }
         }
 
@@ -919,6 +981,87 @@ mod AltairX {
             } else {
                 borrow_balance
             }
+        }
+
+        /// Helpful function to sort through ekubo pools. We skip 1%/2% for gas savings
+        ///
+        /// # Arguments
+        /// * `pool_index` - The index of each pool key
+        ///
+        /// # Returns
+        /// * The fee of the pool at `pool_index`
+        /// * The tick spacing of the pool at `pool_index`
+        /// * The extension of the pool at `pool_index` (use zero for now)
+        fn _get_ekubo_pool(self: @ContractState, pool_index: u32) -> (u128, u128, ContractAddress) {
+            /// Index 0 = fee of 0.05% / 0.10% and spacing of 1000
+            if pool_index == 0 {
+                (170141183460469235273462165868118016, 1000, Zeroable::zero())
+            } /// Index 1 = fee of 0.30% / 0.60% and spacing of 5982
+            else if pool_index == 1 {
+                (1020847100762815411640772995208708096, 5982, Zeroable::zero())
+            } /// Index 2 = fee of 0.01% / 0.02% and spacing of 200
+            else {
+                (34028236692093847977029636859101184, 200, Zeroable::zero())
+            }
+        }
+
+        /// Helpful function to swap in Ekubo
+        ///
+        /// # Arguments
+        /// * `borrowable` - The address of the borrowable
+        /// * `amount_max` - The amount user wants to repay
+        /// * `borrower` - The address of the borrower
+        ///
+        /// # Returns
+        /// * The maximum amount that user should repay
+        fn _get_optimal_ekubo_pool(self: @ContractState, token0: ContractAddress, token1: ContractAddress) -> PoolKey {
+            /// Read ekubo core from storage
+            let ekubo_core = self.ekubo_core.read();
+
+            /// Sort tokens if needed
+            let (token0, token1) = if token1 < token0 {
+                (token1, token0)
+            } else {
+                (token0, token1)
+            };
+
+            /// We try to find the pool with the highest liquidity to filter out dead pools. 
+            /// Not sure if we should use Ekubo's `quote` function on-chain (?)
+
+            /// Get ekubo pool at index 0
+            let (fee, tick_spacing, extension) = self._get_ekubo_pool(0);
+            /// Create pool key with fee and tick spacing at index 0
+            let mut optimal_pool_key: PoolKey = PoolKey { token0, token1, fee, tick_spacing, extension };
+            /// Cache max liquidity at pool 0
+            let mut max_liquidity = ekubo_core.get_pool_liquidity(optimal_pool_key);
+
+            /// Start from index 1
+            let mut len = 1;
+
+            loop {
+                /// Break
+                if len == 3 {
+                    break;
+                };
+
+                /// Get ekubo pool at index `len`
+                let (fee, tick_spacing, extension) = self._get_ekubo_pool(len);
+                /// Create pool key with fee and tick spacing at index `len`
+                let pool_key: PoolKey = PoolKey { token0, token1, fee, tick_spacing, extension };
+                /// Get this pool's liquidity
+                let liquidity = ekubo_core.get_pool_liquidity(pool_key);
+
+                /// Cache max liquidity and pool key if needed
+                if liquidity > max_liquidity {
+                    max_liquidity = liquidity;
+                    optimal_pool_key = pool_key;
+                };
+
+                /// Next iteration
+                len += 1;
+            };
+
+            optimal_pool_key
         }
     }
 }

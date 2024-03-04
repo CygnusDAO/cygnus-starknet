@@ -3,10 +3,10 @@ use starknet::ContractAddress;
 #[derive(Drop, Serde, Copy)]
 enum Aggregator {
     #[default]
-    NONE,
+    JEDISWAP,
+    EKUBO,
     AVNU,
     FIBROUS,
-    JEDISWAP,
 }
 
 #[derive(Drop, Serde)]

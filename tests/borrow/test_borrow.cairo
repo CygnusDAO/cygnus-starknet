@@ -3,7 +3,9 @@ use starknet::{ContractAddress, get_caller_address, ClassHash, get_tx_info};
 use integer::BoundedInt;
 
 // Foundry
-use snforge_std::{declare, start_prank, stop_prank, start_warp, stop_warp, CheatTarget};
+use snforge_std::{
+    declare, start_prank, stop_prank, start_warp, stop_warp, CheatTarget, ContractClass, ContractClassTrait
+};
 
 // Cygnus
 use tests::setup::{setup_with_router, setup};
@@ -13,6 +15,7 @@ use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherT
 use cygnus::terminal::collateral::{ICollateralDispatcher, ICollateralDispatcherTrait};
 use cygnus::factory::hangar18::{IHangar18Dispatcher, IHangar18DispatcherTrait};
 use cygnus::periphery::altair::{IAltairDispatcher, IAltairDispatcherTrait};
+use cygnus::periphery::altair_x::{IAltairXDispatcher, IAltairXDispatcherTrait};
 use snforge_std::PrintTrait;
 
 use cygnus::data::calldata::{LeverageCalldata, Aggregator};
@@ -46,7 +49,7 @@ const ONE_YEAR: u64 = 31536000;
 #[test]
 #[fork("MAINNET")]
 fn borrower_borrows_max_liquidity() {
-    let (hangar18, borrowable, collateral, lp_token, usdc) = setup();
+    let (_, borrowable, collateral, lp_token, usdc) = setup();
 
     let borrower = borrower();
     let lender = lender();
@@ -60,20 +63,20 @@ fn borrower_borrows_max_liquidity() {
     assert(cyg_lp_balance > 0, 'wrong_cyglp_shares');
     assert(cyg_usd_balance > 0, 'wrong_cygusd_shares');
 
-    let (liquidity, shortfall) = collateral.get_account_liquidity(borrower);
+    let (liquidity, _) = collateral.get_account_liquidity(borrower);
 
     start_prank(CheatTarget::One(borrowable.contract_address), borrower);
     borrowable.borrow(borrower, borrower, liquidity, Default::default());
     stop_prank(CheatTarget::One(borrowable.contract_address));
 
-    let (a, b, c) = collateral.get_borrower_position(borrower);
+    let (_, _, c) = collateral.get_borrower_position(borrower);
     assert(c == 1_000_000_000_000_000_000, 'wrong debt');
 }
 
 #[test]
 #[fork("MAINNET")]
 fn borrower_borrows_max_liquidity_with_router() {
-    let (hangar18, borrowable, collateral, lp_token, usdc, router) = setup_with_router();
+    let (_, borrowable, collateral, lp_token, usdc, router) = setup_with_router();
 
     let borrower = borrower();
     let lender = lender();
@@ -87,7 +90,7 @@ fn borrower_borrows_max_liquidity_with_router() {
     assert(cyg_lp_balance > 0, 'wrong_cyglp_shares');
     assert(cyg_usd_balance > 0, 'wrong_cygusd_shares');
 
-    let (liquidity, shortfall) = collateral.get_account_liquidity(borrower);
+    let (liquidity, _) = collateral.get_account_liquidity(borrower);
 
     let usdc_before = usdc.balanceOf(borrower);
     start_prank(CheatTarget::One(borrowable.contract_address), borrower);
@@ -99,7 +102,7 @@ fn borrower_borrows_max_liquidity_with_router() {
     stop_prank(CheatTarget::One(router.contract_address));
     let usdc_after = usdc.balanceOf(borrower);
 
-    let (a, b, c) = collateral.get_borrower_position(borrower);
+    let (_, _, c) = collateral.get_borrower_position(borrower);
     assert(c == 1_000_000_000_000_000_000, 'wrong debt');
     assert(usdc_after - usdc_before == liquidity.into(), 'wrong usdc amount');
 }
@@ -108,7 +111,7 @@ fn borrower_borrows_max_liquidity_with_router() {
 #[fork("MAINNET")]
 #[should_panic(expected: ('u128_sub Overflow',))]
 fn fails_if_receiver_is_not_approved() {
-    let (hangar18, borrowable, collateral, lp_token, usdc, router) = setup_with_router();
+    let (_, borrowable, collateral, lp_token, usdc, router) = setup_with_router();
 
     let borrower = borrower();
     let lender = lender();
@@ -122,9 +125,7 @@ fn fails_if_receiver_is_not_approved() {
     assert(cyg_lp_balance > 0, 'wrong_cyglp_shares');
     assert(cyg_usd_balance > 0, 'wrong_cygusd_shares');
 
-    let (liquidity, shortfall) = collateral.get_account_liquidity(borrower);
-
-    let usdc_before = usdc.balanceOf(borrower);
+    let (liquidity, _) = collateral.get_account_liquidity(borrower);
 
     start_prank(CheatTarget::One(router.contract_address), borrower);
     router.borrow(borrowable, liquidity, borrower, 100000000000000);
@@ -148,14 +149,12 @@ fn leverages_usdc_using_avnu() {
     assert(cyg_lp_balance > 0, 'wrong_cyglp_shares');
     assert(cyg_usd_balance > 0, 'wrong_cygusd_shares');
 
-    let (liquidity, shortfall) = collateral.get_account_liquidity(borrower);
+    set_altair_xtension(hangar18, router);
 
-    let usdc_before = usdc.balanceOf(borrower);
     start_prank(CheatTarget::One(borrowable.contract_address), borrower);
     borrowable.approve(router.contract_address, 1_000_000_000000); // 1M USDC
     stop_prank(CheatTarget::One(borrowable.contract_address));
 
-    let cyg_lp_bal_before = collateral.balanceOf(borrower);
     start_prank(CheatTarget::One(router.contract_address), borrower);
 
     // This is just copied calldata from avnu, check the scripts folder
@@ -206,7 +205,7 @@ fn leverages_usdc_using_avnu() {
         0x1
     ];
 
-    let res = router
+    router
         .leverage(
             lp_token.contract_address,
             collateral.contract_address,
@@ -218,14 +217,9 @@ fn leverages_usdc_using_avnu() {
             array![calls0.span(), calls1.span()]
         );
     stop_prank(CheatTarget::One(router.contract_address));
-    let usdc_after = usdc.balanceOf(borrower);
 
-    let (a, b, c) = collateral.get_borrower_position(borrower);
+    let (_, _, c) = collateral.get_borrower_position(borrower);
     assert(c != 1_000_000_000_000_000_000, 'wrong debt');
-
-    let lp_token_price = collateral.get_lp_token_price();
-
-    let cyg_lp_bal_after = collateral.balanceOf(borrower);
 }
 
 #[test]
@@ -245,7 +239,7 @@ fn reserves_accumulate_correctly() {
     assert(cyg_lp_balance > 0, 'wrong_cyglp_shares');
     assert(cyg_usd_balance > 0, 'wrong_cygusd_shares');
 
-    let (liquidity, shortfall) = collateral.get_account_liquidity(borrower);
+    let (liquidity, _) = collateral.get_account_liquidity(borrower);
 
     start_prank(CheatTarget::One(borrowable.contract_address), borrower);
     borrowable.borrow(borrower, borrower, liquidity, Default::default());
@@ -267,7 +261,7 @@ fn reserves_accumulate_correctly() {
 #[fork("MAINNET")]
 #[should_panic(expected: ('insufficient_liquidity',))]
 fn borrower_exceeds_and_fails() {
-    let (hangar18, borrowable, collateral, lp_token, usdc) = setup();
+    let (_, borrowable, collateral, lp_token, usdc) = setup();
 
     let borrower = borrower();
     let lender = lender();
@@ -281,16 +275,28 @@ fn borrower_exceeds_and_fails() {
     assert(cyg_lp_balance > 0, 'wrong_cyglp_shares');
     assert(cyg_usd_balance > 0, 'wrong_cygusd_shares');
 
-    let (liquidity, shortfall) = collateral.get_account_liquidity(borrower);
-
-    let arr: Array<Span<felt252>> = array![];
+    let (liquidity, _) = collateral.get_account_liquidity(borrower);
 
     start_prank(CheatTarget::One(borrowable.contract_address), borrower);
     borrowable.borrow(borrower, borrower, liquidity + 1, Default::default());
     stop_prank(CheatTarget::One(borrowable.contract_address));
+}
+// ----------------------------------------------------------------------------------------------
 
-    let (a, b, c) = collateral.get_borrower_position(borrower);
-    assert(c == 1_000_000_000_000_000_000, 'wrong debt');
+fn set_altair_xtension(hangar18: IHangar18Dispatcher, altair: IAltairDispatcher) {
+    let contract = declare('AltairX');
+    let constructor_calldata: Array<felt252> = array![
+        hangar18.contract_address.into(), altair.contract_address.into(), contract.class_hash.into()
+    ];
+    let contract_address: ContractAddress = contract.deploy(@constructor_calldata).unwrap();
+
+    let altair_x = IAltairXDispatcher { contract_address };
+
+    let admin = admin();
+
+    start_prank(CheatTarget::One(altair.contract_address), admin);
+    altair.set_altair_extension(array![0], altair_x);
+    stop_prank(CheatTarget::One(altair.contract_address));
 }
 
 fn deposit_lp_token(borrower: ContractAddress, lp_token: IERC20Dispatcher, collateral: ICollateralDispatcher) {

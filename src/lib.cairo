@@ -16,6 +16,7 @@ mod periphery {
     mod errors;
     mod integrations {
         mod jediswap_router;
+        mod ekubo_router;
     }
 }
 

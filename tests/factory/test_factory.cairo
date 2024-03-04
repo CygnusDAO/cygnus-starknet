@@ -15,7 +15,7 @@ use tests::setup::{setup_with_router, setup};
 #[test]
 #[fork("MAINNET")]
 fn switches_orbiter_status() {
-    let (hangar18, borrowable, collateral, lp_token, usdc) = setup();
+    let (hangar18, _, _, _, _) = setup();
     let status = hangar18.all_orbiters(0).status;
     assert(status, 'not switched on');
     let admin = admin();
@@ -31,7 +31,7 @@ fn switches_orbiter_status() {
 #[fork("MAINNET")]
 #[should_panic(expected: ('hangar_orbiter_inactive',))]
 fn cannot_deploy_with_switched_off_orbiters() {
-    let (hangar18, borrowable, collateral, lp_token, usdc) = setup();
+    let (hangar18, _, _, lp_token, _) = setup();
     start_prank(CheatTarget::One(hangar18.contract_address), admin());
     hangar18.switch_orbiter_status(0);
     hangar18.deploy_shuttle(0, lp_token.contract_address);

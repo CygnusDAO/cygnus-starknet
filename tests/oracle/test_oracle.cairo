@@ -1,8 +1,11 @@
 // Core libs
-use starknet::{ContractAddress, get_caller_address, ClassHash, contract_address_const};
+use starknet::{
+    ContractAddress, get_caller_address, ClassHash, contract_address_const, ClassHashIntoFelt252,
+    Felt252TryIntoClassHash, class_hash_const, class_hash_to_felt252, class_hash_try_from_felt252
+};
 
 // Foundry
-use snforge_std::{declare, start_prank, stop_prank, ContractClassTrait, start_warp, stop_warp};
+use snforge_std::{declare, start_prank, stop_prank, ContractClassTrait, start_warp, stop_warp, ContractClass};
 
 // Cygnus
 use tests::setup::{setup};
@@ -24,7 +27,7 @@ use cygnus::oracle::pragma_interface::{DataType};
 #[test]
 #[fork("MAINNET")]
 fn correct_price_for_eth_feed() {
-    let (hangar18, borrowable, collateral, lp_token, usdc) = setup();
+    let (_, _, collateral, _, _) = setup();
     let oracle = ICygnusNebulaDispatcher { contract_address: collateral.nebula() };
     let o = oracle.get_asset_price(DataType::SpotEntry('ETH/USD'));
     /// Check manually
@@ -34,7 +37,7 @@ fn correct_price_for_eth_feed() {
 #[test]
 #[fork("MAINNET")]
 fn test_get_lp_token_price_from_oracle() {
-    let (hangar18, borrowable, collateral, lp_token, usdc) = setup();
+    let (_, _, collateral, lp_token, _) = setup();
     let oracle = ICygnusNebulaDispatcher { contract_address: collateral.nebula() };
     let o = oracle.lp_token_price(lp_token.contract_address);
     /// Check manually
@@ -44,7 +47,7 @@ fn test_get_lp_token_price_from_oracle() {
 #[test]
 #[fork("MAINNET")]
 fn oracle_matches_collateral() {
-    let (hangar18, borrowable, collateral, lp_token, usdc) = setup();
+    let (_, _, collateral, lp_token, _) = setup();
     let oracle = ICygnusNebulaDispatcher { contract_address: collateral.nebula() };
     let o = oracle.lp_token_price(lp_token.contract_address);
     let price = collateral.get_lp_token_price();

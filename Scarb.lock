@@ -5,8 +5,14 @@ version = 1
 name = "cygnus"
 version = "0.1.0"
 dependencies = [
+ "ekubo",
  "snforge_std",
 ]
+
+[[package]]
+name = "ekubo"
+version = "0.1.0"
+source = "git+https://github.com/EkuboProtocol/abis?rev=696ab1b#696ab1b0acd00043e88764b5d000ce2e2f76f695"
 
 [[package]]
 name = "snforge_std"
