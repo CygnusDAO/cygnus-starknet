@@ -688,7 +688,6 @@ mod Hangar18 {
             (borrowable, collateral)
         }
 
-
         /// Sets a new pending admin which they must then accept ownership
         ///
         /// # Security

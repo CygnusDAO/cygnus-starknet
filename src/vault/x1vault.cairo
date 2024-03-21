@@ -145,7 +145,7 @@ mod X1Vault {
     use cygnus::token::erc20::cyg::{ICygnusDAODispatcher, ICygnusDAODispatcherTrait};
     use cygnus::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
-    /// # Libraries
+    /// # Imports
     use cygnus::data::x1vault::{UserInfo};
     use cygnus::libraries::full_math_lib::FixedPointMathLib::FixedPointMathLibTrait;
     use starknet::{get_contract_address, ContractAddress, get_caller_address, get_block_timestamp};

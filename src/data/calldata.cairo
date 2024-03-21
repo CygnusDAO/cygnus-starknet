@@ -10,13 +10,6 @@ enum Aggregator {
 }
 
 #[derive(Drop, Serde)]
-enum CallbackID {
-    LEVERAGE,
-    DELEVERAGE,
-    FLASH_LIQUIDATE,
-}
-
-#[derive(Drop, Serde)]
 struct LeverageCalldata {
     lp_token_pair: ContractAddress,
     collateral: ContractAddress,

@@ -5,7 +5,7 @@ trait IERC20<TState> {
     fn name(self: @TState) -> felt252;
     fn symbol(self: @TState) -> felt252;
     fn decimals(self: @TState) -> u8;
-    fn total_supply(self: @TState) -> u256;
+    fn totalSupply(self: @TState) -> u256;
     fn balanceOf(self: @TState, account: ContractAddress) -> u256;
     fn allowance(self: @TState, owner: ContractAddress, spender: ContractAddress) -> u256;
     fn transfer(ref self: TState, recipient: ContractAddress, amount: u256) -> bool;
@@ -79,7 +79,7 @@ mod ERC20 {
             18
         }
 
-        fn total_supply(self: @ContractState) -> u256 {
+        fn totalSupply(self: @ContractState) -> u256 {
             self._total_supply.read()
         }
 

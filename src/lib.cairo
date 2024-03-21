@@ -60,6 +60,12 @@ mod oracle {
     mod events;
 }
 
+mod vesting {
+    mod token_vesting;
+    mod events;
+    mod errors;
+}
+
 /// # Module
 /// * `cyg` - The CYG token
 mod cyg {
@@ -94,6 +100,7 @@ mod data {
     mod altair;
     mod x1vault;
     mod nebula;
+    mod token_vesting;
 }
 
 /// # Module
@@ -109,7 +116,6 @@ mod libraries {
 mod voids {
     mod zklend;
 }
-
 
 /// # Module
 /// * `token` - Standard tokens/interfaces
