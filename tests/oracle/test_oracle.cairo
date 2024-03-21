@@ -17,6 +17,7 @@ use integer::BoundedInt;
 use snforge_std::PrintTrait;
 use cygnus::oracle::nebula::{ICygnusNebulaDispatcher, ICygnusNebulaDispatcherTrait};
 use cygnus::oracle::pragma_interface::{DataType};
+use cygnus::data::nebula::{LPInfo, NebulaOracle};
 
 // TIMESTAMP FORK: 1699559919
 
@@ -52,4 +53,33 @@ fn oracle_matches_collateral() {
     let o = oracle.lp_token_price(lp_token.contract_address);
     let price = collateral.get_lp_token_price();
     assert(o == price, 'collateral,oracle differ');
+}
+
+#[test]
+#[fork("MAINNET")]
+fn lp_info_is_correct() {
+    let (_, _, collateral, lp_token, _) = setup();
+    let oracle = ICygnusNebulaDispatcher { contract_address: collateral.nebula() };
+
+    let info: LPInfo = oracle.lp_token_info(lp_token.contract_address);
+
+    'Tokens'.print();
+    info.token0.print();
+    info.token1.print();
+
+    'Prices'.print();
+    info.token0_price.print();
+    info.token1_price.print();
+
+    'Reserves'.print();
+    info.token0_reserves.print();
+    info.token1_reserves.print();
+
+    'Decimals'.print();
+    info.token0_decimals.print();
+    info.token1_decimals.print();
+
+    'Reserves USD'.print();
+    info.reserves0_usd.print();
+    info.reserves1_usd.print();
 }

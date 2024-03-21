@@ -26,7 +26,6 @@ fn switches_orbiter_status() {
     assert(!status, 'didnt turn off');
 }
 
-
 #[test]
 #[fork("MAINNET")]
 #[should_panic(expected: ('hangar_orbiter_inactive',))]
