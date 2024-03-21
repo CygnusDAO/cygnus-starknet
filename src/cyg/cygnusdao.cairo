@@ -138,7 +138,7 @@ mod CygnusDAO {
 
     /// # Libraries
     use integer::BoundedInt;
-    use starknet::{ContractAddress, send_message_to_l1_syscall, get_caller_address};
+    use starknet::{ContractAddress, send_message_to_l1_syscall, get_caller_address, SyscallResultTrait};
 
     /// # Errors
     use cygnus::cyg::errors::Errors;
@@ -430,7 +430,8 @@ mod CygnusDAO {
             self.emit(CygMainnetSet { old_cyg_mainnet, new_cyg_mainnet });
         }
 
-        /// Initiates the teleporting of CYG from starknet to Mainnet. Event emitted on consuming message.
+        /// Initiates the teleporting of CYG from starknet to Mainnet. Doesn't emit event, instead 
+        /// an event is emitted on consuming the message at L1.
         ///
         /// # Implementation
         /// * ICygnusDAO
@@ -451,22 +452,17 @@ mod CygnusDAO {
             assert(recipient != cyg_token_mainnet, Errors::RECIPIENT_CANT_BE_TELEPORTER);
 
             /// Burn tokens from caller, reverts on underflow
-            let caller = get_caller_address();
-            self._burn(caller, amount);
+            self._burn(get_caller_address(), amount);
+
+            /// Send message to L1
+            let message: Array<felt252> = array![T_T, recipient, amount.into()];
+            send_message_to_l1_syscall(cyg_token_mainnet, message.span()).unwrap_syscall();
 
             /// Pending CYG to be claimed by user on mainnet
             let new_pending_cyg = self.pending_cyg_mainnet.read(recipient) + amount;
 
-            /// Send message to L1
-            let message: Array<felt252> = array![T_T, recipient, amount.into()];
-
-            match send_message_to_l1_syscall(cyg_token_mainnet, message.span()) {
-                /// Update recipient pending message if success
-                Result::Ok(()) => { self.pending_cyg_mainnet.write(recipient, new_pending_cyg) },
-                /// # Error
-                /// * `TheSystemHasFailed`
-                Result::Err(_) => { panic_with_felt252(Errors::THE_SYSTEM_HAS_FAILED) }
-            }
+            /// Update recipient's pending CYG on Mainnet
+            self.pending_cyg_mainnet.write(recipient, new_pending_cyg);
         }
     }
 
@@ -524,7 +520,7 @@ mod CygnusDAO {
             0
         };
 
-        /// Reset recipient slot
+        /// Update recipient's pending CYG
         self.pending_cyg_mainnet.write(recipient.into(), new_pending_cyg);
 
         /// # Event
