@@ -78,7 +78,6 @@
 use starknet::ContractAddress;
 use cygnus::terminal::collateral::{ICollateralDispatcher, ICollateralDispatcherTrait};
 use cygnus::data::interest::{InterestRateModel, BorrowSnapshot};
-use cygnus::data::calldata::{LeverageCalldata, DeleverageCalldata};
 use cygnus::rewarder::pillars::{IPillarsOfCreationDispatcher, IPillarsOfCreationDispatcherTrait};
 
 /// # Interface
@@ -418,7 +417,6 @@ mod Borrowable {
     use starknet::{ContractAddress, get_caller_address, get_contract_address, get_block_timestamp};
     use cygnus::libraries::full_math_lib::FullMathLib::FixedPointMathLibTrait;
     use cygnus::data::interest::{InterestRateModel, BorrowSnapshot};
-    use cygnus::data::calldata::{LeverageCalldata, DeleverageCalldata};
 
     /// # Errors
     use cygnus::terminal::errors::{BorrowableErrors as Errors};

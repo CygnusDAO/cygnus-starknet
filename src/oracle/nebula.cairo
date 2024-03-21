@@ -115,20 +115,22 @@ mod CygnusNebula {
         total_oracles: u8
     }
 
-
     /// The denomination price feed. To replace just replace `USDC` with other supported asset by Pragma
     /// and replace `DENOMINATION_SCALAR` with the correct asset scalar (ie. The price feed returns the price
     /// of the asset in 6 decimals, so denom scalar is 10 ** (18 -6))
     const DENOMINATION_PRICE_FEED: felt252 = 'USDC/USD';
 
-    /// 8 is the decimals used by Pragma oracles for all SPOT price feeds
+    /// 8 is the decimals used by Pragma oracles for most SPOT price feeds
     const AGGREGATOR_SCALAR: u128 = 10000000000; // 10 ** (18 - 8)
 
     /// The scalar of the decimals used by Pragma for the DENOMINATION_PRICE_FEED
     const DENOMINATION_PRICE_SCALAR: u128 = 1000000000000; // 10 ** (18 - 6)
 
-    // LP scalar to simplify getting the price of the LP
+    /// LP scalar to simplify getting the price of the LP
     const LP_SCALAR: u128 = 2_000000000_000000000;
+
+    /// Pragma oracle of mainnet
+    const PRAGMA_ORACLE: felt252 = 0x2a85bd616f912537c50a49a4076db02c00b29b2cdc8a197ce92ed1837fa875b;
 
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
     ///     4. CONSTRUCTOR
@@ -148,15 +150,7 @@ mod CygnusNebula {
         self.decimals.write(denomination_token.decimals());
 
         /// Pragma oracle on mainnet
-        self
-            .pragma_oracle
-            .write(
-                IOracleABIDispatcher {
-                    contract_address: contract_address_const::<
-                        0x2a85bd616f912537c50a49a4076db02c00b29b2cdc8a197ce92ed1837fa875b
-                    >()
-                }
-            );
+        self.pragma_oracle.write(IOracleABIDispatcher { contract_address: contract_address_const::<PRAGMA_ORACLE>() });
     }
 
     /// ═══════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -346,9 +340,13 @@ mod CygnusNebula {
 
     #[generate_trait]
     impl InternalImpl of InternalTrait {
-        /// Internal check to reverts if caller is not registry
+        /// Internal check to revert if caller is not registry
         fn _check_registry(self: @ContractState) {
+            /// Get caller address
             let caller = get_caller_address();
+
+            /// # Error
+            /// * `ONLY_NEBULA_REGISTRY`
             assert(caller == self.nebula_registry.read().contract_address, Errors::ONLY_NEBULA_REGISTRY);
         }
 
