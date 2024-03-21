@@ -166,8 +166,8 @@ mod AltairX {
     /// # Libraries
     use cygnus::libraries::full_math_lib::FullMathLib::FixedPointMathLibTrait;
     use starknet::{
-        ContractAddress, get_caller_address, get_contract_address, get_block_timestamp, contract_address_const,
-        call_contract_syscall, ClassHash, SyscallResultTrait
+        ContractAddress, get_caller_address, get_contract_address, get_block_timestamp, call_contract_syscall,
+        ClassHash, SyscallResultTrait
     };
 
     /// # Errors
@@ -185,8 +185,7 @@ mod AltairX {
         ekubo_router::{IRouterDispatcher, IRouterDispatcherTrait, TokenAmount, RouteNode}
     };
     use ekubo::{
-        interfaces::{core::{ICoreDispatcher, ICoreDispatcherTrait}}, types::{keys::{PoolKey}, i129::{i129, i129_new}},
-        components::clear::{IClearDispatcher, IClearDispatcherTrait}
+        interfaces::{core::{ICoreDispatcher, ICoreDispatcherTrait}}, types::{keys::{PoolKey}, i129::{i129, i129_new}}
     };
 
 
@@ -387,11 +386,12 @@ mod AltairX {
             let mut borrow_data = calldata.span();
             let calldata = Serde::<LeverageCalldata>::deserialize(ref borrow_data).unwrap();
 
-            /// # Error TODO
-            /// * `NOT_BORROWABLE` - Avoid if caller is not borrowable 
-            //assert(calldata.borrowable == get_caller_address(), Errors::CALLER_NOT_BORROWABLE);
+            /// TODO
+            /// # Error
+            /// * `NOT_BORROWABLE` - Avoid if caller is not borrowable
+            // assert(calldata.borrowable == get_caller_address(), Errors::CALLER_NOT_BORROWABLE);
 
-            /// By now this contract has USDC that were flash borrowed from the collateral. Convert all USDC into
+            /// By now this contract has USDC that were flash borrowed from the borrowable. Convert all USDC into
             /// more LP and deposit back in collateral, minting CygLP to the receiver. Borrowable contract does
             /// check at the end that the collateral amount by the borrower is sufficient for the loan.
             self._mint_lp_and_deposit(borrow_amount, calldata)
@@ -421,7 +421,7 @@ mod AltairX {
             /// * `NOT_COLLATERAL` - Avoid if caller is not collateral
             /// assert(get_caller_address() == calldata.collateral, Errors::CALLER_NOT_COLLATERAL);
 
-            /// By now this contract has LPs that were flash redeemed from collateral. Burn the LP, receive
+            /// By now this contract has LPs that were flash redeemed from borrowable. Burn the LP, receive
             /// token0 and token1 assets, convert to USDC, repay loan or part of the loan. Collateral contract
             /// is expecting an equivalent amount of the LP redeemed in CygLP, transfer from borrower to collateral
             /// and burn the CygLP.

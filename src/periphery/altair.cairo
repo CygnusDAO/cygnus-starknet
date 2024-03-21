@@ -37,7 +37,6 @@
 
 // Libraries
 use starknet::ContractAddress;
-use cygnus::data::altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition, LenderPosition};
 use cygnus::data::calldata::{Aggregator};
 use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait};
 use cygnus::periphery::altair_x::{IAltairXDispatcher, IAltairXDispatcherTrait};
@@ -323,15 +322,17 @@ mod Altair {
     use cygnus::factory::hangar18::{IHangar18Dispatcher, IHangar18DispatcherTrait};
     use cygnus::token::erc20::{IERC20Dispatcher, IERC20DispatcherTrait};
     use cygnus::token::univ2pair::{IUniswapV2PairDispatcher, IUniswapV2PairDispatcherTrait};
-    use cygnus::terminal::collateral::{ICollateralDispatcher, ICollateralDispatcherTrait};
-    use cygnus::terminal::borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait};
+    use cygnus::terminal::{
+        collateral::{ICollateralDispatcher, ICollateralDispatcherTrait},
+        borrowable::{IBorrowableDispatcher, IBorrowableDispatcherTrait}
+    };
     use cygnus::periphery::altair_x::{IAltairXDispatcher, IAltairXDispatcherTrait, IAltairXLibraryDispatcher};
     use cygnus::periphery::integrations::jediswap_router::{IJediswapRouterDispatcher, IJediswapRouterDispatcherTrait};
     use ekubo::interfaces::{
         router::{IRouterDispatcher, IRouterDispatcherTrait}, core::{ICoreDispatcher, ICoreDispatcherTrait}
     };
 
-    /// # Libraries
+    /// # Imports
     use cygnus::libraries::full_math_lib::FullMathLib::FixedPointMathLibTrait;
     use starknet::{
         ContractAddress, get_caller_address, get_contract_address, get_block_timestamp, contract_address_const,
@@ -340,8 +341,7 @@ mod Altair {
 
     /// # Data
     use cygnus::data::{
-        shuttle::{Shuttle}, calldata::{LeverageCalldata, DeleverageCalldata, LiquidateCalldata, Aggregator, CallbackID},
-        altair::{ShuttleInfoC, ShuttleInfoB, BorrowerPosition, LenderPosition}
+        shuttle::{Shuttle}, calldata::{LeverageCalldata, DeleverageCalldata, LiquidateCalldata, Aggregator}
     };
 
     /// # Errors
@@ -381,13 +381,26 @@ mod Altair {
         ekubo_core: ICoreDispatcher
     }
 
+    /// Aggregator addresses on Mainnet
+
+    /// Avnu
+    const AVNU_ROUTER: felt252 = 0x4270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f;
+    /// Fibrous
+    const FIBROUS_ROUTER: felt252 = 0x00f6f4CF62E3C010E0aC2451cC7807b5eEc19a40b0FaaCd00CCA3914280FDf5a;
+    /// Jediswap
+    const JEDISWAP_ROUTER: felt252 = 0x041fd22b238fa21cfcf5dd45a8548974d8263b3a531a60388411c5e230f97023;
+    /// Ekubo Router v2.0.1
+    const EKUBO_ROUTER: felt252 = 0x03266fe47923e1500aec0fa973df8093b5850bbce8dcd0666d3f47298b4b806e;
+    /// Ekubo core
+    const EKUBO_CORE: felt252 = 0x00000005dd3D2F4429AF886cD1a3b08289DBcEa99A294197E9eB43b0e0325b4b;
+
     /// Selectors
 
     /// `multi_route_swap`
     const AVNU_SELECTOR: felt252 = 0x1171593aa5bdadda4d6b0efde6cc94ee7649c3163d5efeb19da6c16d63a2a63;
-
     /// `swap`
     const FIBROUS_SELECTOR: felt252 = 0x15543c3708653cda9d418b4ccd3be11368e40636c10c44b18cfe756b6d88b29;
+
 
     /// -------------------------------------------------------------------------------------------------------
     ///     4. CONSTURCTOR
@@ -407,48 +420,22 @@ mod Altair {
         /// ----- These routers are used in most cases ------
 
         /// Avnu router
-        self
-            .avnu_exchange
-            .write(contract_address_const::<0x4270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f>());
-
+        self.avnu_exchange.write(contract_address_const::<AVNU_ROUTER>());
         /// Fibrous router
-        self
-            .fibrous_router
-            .write(contract_address_const::<0x00f6f4CF62E3C010E0aC2451cC7807b5eEc19a40b0FaaCd00CCA3914280FDf5a>());
+        self.fibrous_router.write(contract_address_const::<FIBROUS_ROUTER>());
 
         /// ------- These routers are used to handle the swaps on-chain if needed -----
 
         /// Jediswap router
         self
             .jediswap_router
-            .write(
-                IJediswapRouterDispatcher {
-                    contract_address: contract_address_const::<
-                        0x041fd22b238fa21cfcf5dd45a8548974d8263b3a531a60388411c5e230f97023
-                    >()
-                }
-            );
+            .write(IJediswapRouterDispatcher { contract_address: contract_address_const::<JEDISWAP_ROUTER>() });
 
         /// Ekubo router
-        self
-            .ekubo_router
-            .write(
-                IRouterDispatcher {
-                    contract_address: contract_address_const::<
-                        0x03266fe47923e1500aec0fa973df8093b5850bbce8dcd0666d3f47298b4b806e
-                    >()
-                }
-            );
+        self.ekubo_router.write(IRouterDispatcher { contract_address: contract_address_const::<EKUBO_ROUTER>() });
 
-        self
-            .ekubo_core
-            .write(
-                ICoreDispatcher {
-                    contract_address: contract_address_const::<
-                        0x00000005dd3D2F4429AF886cD1a3b08289DBcEa99A294197E9eB43b0e0325b4b
-                    >()
-                }
-            );
+        /// Ekubo core
+        self.ekubo_core.write(ICoreDispatcher { contract_address: contract_address_const::<EKUBO_CORE>() });
     }
 
     /// -------------------------------------------------------------------------------------------------------
@@ -690,6 +677,7 @@ mod Altair {
 
             /// Encode calldata into array of felts
             let mut calldata = array![];
+
             LeverageCalldata { lp_token_pair, collateral, borrowable, recipient, lp_amount_min, aggregator, swapdata }
                 .serialize(ref calldata);
 
