@@ -149,7 +149,7 @@ mod NebulaRegistry {
     use cygnus::data::nebula::{LPInfo};
 
     /// # Errors
-    use cygnus::registry::errors::RegistryErrors;
+    use cygnus::registry::errors::Errors;
 
     /// # Events
     use cygnus::registry::events::Events::{NewPendingAdmin, NewNebula, NewAdmin, NewOracle};
@@ -343,7 +343,7 @@ mod NebulaRegistry {
 
             /// # Error
             /// * `ALREADY_CREATED` - Reverts if nebula is already created
-            assert(self.nebulas.read(nebula_address).created_at == 0, RegistryErrors::ALREADY_CREATED);
+            assert(self.nebulas.read(nebula_address).created_at == 0, Errors::ALREADY_CREATED);
 
             // Get unique ID
             let nebula_id: u32 = self.total_nebulas.read();
@@ -401,7 +401,7 @@ mod NebulaRegistry {
             let new_admin = get_caller_address();
 
             /// Error - `ONLY_PENDING_ADMIN`
-            assert(new_admin == self.pending_admin.read(), RegistryErrors::ONLY_PENDING_ADMIN);
+            assert(new_admin == self.pending_admin.read(), Errors::ONLY_PENDING_ADMIN);
 
             /// Admin up until now
             let old_admin = self.admin.read();
@@ -434,7 +434,7 @@ mod NebulaRegistry {
 
             /// # Error
             /// * `ONLY_ADMIN` - Reverts if sender is not admin 
-            assert(get_caller_address() == admin, RegistryErrors::ONLY_ADMIN)
+            assert(get_caller_address() == admin, Errors::ONLY_ADMIN)
         }
     }
 }
