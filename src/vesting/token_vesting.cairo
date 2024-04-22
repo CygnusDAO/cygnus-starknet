@@ -301,7 +301,7 @@ mod TokenVesting {
             /// # Error
             /// * `SLICE_PERIODS_ZERO` - Must be at least 1 second
             assert(slice_period_seconds > 0, Errors::SLICE_PERIODS_ZERO);
-            
+
             /// # Error
             /// * `DURATION_BELOW_CLIFF` - Duration must be gte cliff
             assert(duration >= cliff, Errors::DURATION_BELOW_CLIFF);
