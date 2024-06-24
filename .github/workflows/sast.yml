@@ -1,0 +1,27 @@
+name: sast
+
+on:
+  push:
+    branches:
+      - main  # Set a branch to deploy
+  pull_request:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Run Sast For Cyber Security Assurance
+        run: |
+          wget https://github.com/crytic/caracal/releases/download/v0.2.3/caracal-v0.2.3-linux.tar.gz
+          tar -xzf caracal-v0.2.3-linux.tar.gz -O ./caracal-v2
+
+          git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.14.0
+          . "$HOME/.asdf/asdf.sh" # and add it to ~/.bashrc to set up manually
+          asdf install scarb 2.5.3
+          asdf global scarb 2.5.3
+          ./caracal-v2 detect cygnus-starknet/
